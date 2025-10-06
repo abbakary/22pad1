@@ -1,0 +1,484 @@
+{% extends 'tracker/base.html' %}
+{% load static custom_filters tz %}
+{% load date_filters %}
+
+{% block title %}Customers{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <!-- Header Section -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="row align-items-center">
+            <div class="col-6">
+              <h4 class="mb-0"><i class="fa fa-users me-2 text-primary"></i>Customers</h4>
+            </div>
+            <div class="col-6">
+              <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0 justify-content-end">
+                  <li class="breadcrumb-item"><a href="{% url 'tracker:dashboard' %}"><i class="fa fa-home me-1"></i>Dashboard</a></li>
+                  <li class="breadcrumb-item active">Customers</li>
+                </ol>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search & Filters -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-header bg-light">
+          <h6 class="mb-0"><i class="fa fa-filter me-2"></i>Search & Filters</h6>
+        </div>
+        <div class="card-body">
+          <form method="get">
+            <div class="row g-3 align-items-end">
+              <div class="col-md-3">
+                <label class="form-label fw-medium">Search</label>
+                <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Name, phone, email, code">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label fw-medium">Type</label>
+                <select name="type" class="form-select">
+                  <option value="">All Types</option>
+                  <option value="government" {% if request.GET.type == 'government' %}selected{% endif %}>Government</option>
+                  <option value="ngo" {% if request.GET.type == 'ngo' %}selected{% endif %}>NGO</option>
+                  <option value="company" {% if request.GET.type == 'company' %}selected{% endif %}>Private Company</option>
+                  <option value="personal" {% if request.GET.type == 'personal' %}selected{% endif %}>Personal</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label fw-medium">Status</label>
+                <select name="status" class="form-select">
+                  <option value="">All Status</option>
+                  <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Active</option>
+                  <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                  <option value="returning" {% if request.GET.status == 'returning' %}selected{% endif %}>Returning</option>
+                </select>
+              </div>
+              {% if user.is_superuser %}
+              <div class="col-md-2">
+                <div class="d-flex align-items-center mb-2">
+                  <label class="form-label fw-medium mb-0 me-2">Branch</label>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#branchFilter" title="Toggle Branch Filter">
+                    <i class="fa fa-cog"></i>
+                  </button>
+                </div>
+                <div class="collapse" id="branchFilter">
+                  <input type="text" name="branch" value="{{ request.GET.branch }}" class="form-control" placeholder="Branch name" list="branchesList">
+                  {% include 'tracker/partials/branch_datalist.html' %}
+                  <small class="text-muted">Admin only filter</small>
+                </div>
+              </div>
+              {% endif %}
+              <div class="col-md-2 ms-auto">
+                <button class="btn btn-primary w-100" type="submit">
+                  <i class="fa fa-search me-1"></i>Search
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Statistics Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <h6 class="text-muted mb-1">Active Today</h6>
+              <h3 class="mb-0 text-primary">{{ active_customers }}</h3>
+            </div>
+            <div class="bg-primary bg-opacity-10 rounded-circle p-3">
+              <i class="fa fa-user-check text-primary fa-lg"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <h6 class="text-muted mb-1">New Today</h6>
+              <h3 class="mb-0 text-success">{{ new_customers_today }}</h3>
+            </div>
+            <div class="bg-success bg-opacity-10 rounded-circle p-3">
+              <i class="fa fa-user-plus text-success fa-lg"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <h6 class="text-muted mb-1">Returning</h6>
+              <h3 class="mb-0 text-warning">{{ returning_customers }}</h3>
+            </div>
+            <div class="bg-warning bg-opacity-10 rounded-circle p-3">
+              <i class="fa fa-user-friends text-warning fa-lg"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Customers Table -->
+  <div class="card shadow-sm">
+    <div class="card-header bg-white border-bottom">
+      <h5 class="card-title mb-0"><i class="fa fa-list me-2"></i>Customers List</h5>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="fw-semibold">Code</th>
+              <th class="fw-semibold">Customer</th>
+              <th class="fw-semibold">Contact</th>
+              <th class="fw-semibold">Type</th>
+              <th class="fw-semibold">Visits</th>
+              <th class="fw-semibold">Last Visit</th>
+              {% if user.is_superuser %}<th class="fw-semibold">Branch</th>{% endif %}
+              <th class="fw-semibold text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in customers %}
+            <tr>
+              <td>
+                <span class="badge bg-light text-dark font-monospace">{{ c.code }}</span>
+              </td>
+              <td>
+                <div class="d-flex align-items-center">
+                  <div class="bg-primary bg-opacity-10 rounded-circle p-2 me-2">
+                    <i class="fa fa-user text-primary"></i>
+                  </div>
+                  <div>
+                    <a href="{% url 'tracker:customer_detail' pk=c.id %}" class="text-decoration-none fw-medium">
+                      {{ c.full_name }}
+                    </a>
+                    {% if c.email %}
+                    <small class="text-muted d-block">{{ c.email }}</small>
+                    {% endif %}
+                  </div>
+                </div>
+              </td>
+              <td>
+                <div>
+                  <i class="fa fa-phone me-1 text-muted"></i>
+                  <span>{{ c.phone|default:"-" }}</span>
+                </div>
+              </td>
+              <td>
+                {% if c.customer_type == 'government' %}
+                  <span class="badge bg-primary rounded-pill"><i class="fa fa-building me-1"></i>Government</span>
+                {% elif c.customer_type == 'ngo' %}
+                  <span class="badge bg-info rounded-pill"><i class="fa fa-heart me-1"></i>NGO</span>
+                {% elif c.customer_type == 'company' %}
+                  <span class="badge bg-success rounded-pill"><i class="fa fa-briefcase me-1"></i>Company</span>
+                {% else %}
+                  <span class="badge bg-secondary rounded-pill"><i class="fa fa-user me-1"></i>Personal</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="d-flex align-items-center">
+                  <span class="badge bg-light text-dark me-1">{{ c.total_visits }}</span>
+                  {% if c.total_visits > 1 %}
+                    <i class="fa fa-star text-warning" title="Returning Customer"></i>
+                  {% endif %}
+                </div>
+              </td>
+              <td class="text-muted small">
+                {% if c.last_visit %}
+                  {{ c.last_visit|localtime|date_medium }}
+                {% else %}
+                  <span class="text-muted">Never</span>
+                {% endif %}
+              </td>
+              {% if user.is_superuser %}
+              <td>
+                <span class="badge bg-light text-dark">{{ c.branch }}</span>
+              </td>
+              {% endif %}
+              <td class="text-end">
+                <div class="dropdown actions-dropdown">
+                  <button class="btn btn-sm btn-outline-secondary actions-toggle" type="button" data-bs-toggle="dropdown" aria-label="More actions">
+                    <i class="fa fa-ellipsis-v"></i>
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="{% url 'tracker:customer_detail' pk=c.id %}"><i class="fa fa-eye me-2 text-primary"></i>View Details</a></li>
+                    <li><a class="dropdown-item" href="{% url 'tracker:create_order_for_customer' pk=c.id %}"><i class="fa fa-plus me-2 text-success"></i>New Order</a></li>
+                    <li><a class="dropdown-item" href="{% url 'tracker:customer_edit' pk=c.id %}"><i class="fa fa-edit me-2 text-warning"></i>Edit Customer</a></li>
+                    {% if user.is_superuser or user.is_staff %}
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                      <form method="post" action="{% url 'tracker:customer_delete' pk=c.id %}" onsubmit="return confirm('Delete this customer?');">
+                        {% csrf_token %}
+                        <button type="submit" class="dropdown-item text-danger"><i class="fa fa-trash me-2"></i>Delete Customer</button>
+                      </form>
+                    </li>
+                    {% endif %}
+                  </ul>
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="{% if user.is_superuser %}8{% else %}7{% endif %}" class="text-center text-muted py-4">
+                <i class="fa fa-users fa-2x mb-2 d-block"></i>
+                No customers found
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div class="card-footer bg-light border-top-0">
+        <div class="d-flex justify-content-between align-items-center">
+          <div class="small text-muted">
+            <i class="fa fa-info-circle me-1"></i>
+            Page {{ customers.number }} of {{ customers.paginator.num_pages }}
+          </div>
+          <nav>
+            <ul class="pagination pagination-sm mb-0">
+              {% if customers.has_previous %}
+              <li class="page-item">
+                <a class="page-link" href="?page=1" title="First page">
+                  <i class="fa fa-angle-double-left"></i>
+                </a>
+              </li>
+              <li class="page-item">
+                <a class="page-link" href="?page={{ customers.previous_page_number }}" title="Previous page">
+                  <i class="fa fa-angle-left"></i> Prev
+                </a>
+              </li>
+              {% else %}
+              <li class="page-item disabled">
+                <span class="page-link"><i class="fa fa-angle-double-left"></i></span>
+              </li>
+              <li class="page-item disabled">
+                <span class="page-link"><i class="fa fa-angle-left"></i> Prev</span>
+              </li>
+              {% endif %}
+              
+              <li class="page-item active">
+                <span class="page-link">{{ customers.number }}</span>
+              </li>
+              
+              {% if customers.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="?page={{ customers.next_page_number }}" title="Next page">
+                  Next <i class="fa fa-angle-right"></i>
+                </a>
+              </li>
+              <li class="page-item">
+                <a class="page-link" href="?page={{ customers.paginator.num_pages }}" title="Last page">
+                  <i class="fa fa-angle-double-right"></i>
+                </a>
+              </li>
+              {% else %}
+              <li class="page-item disabled">
+                <span class="page-link">Next <i class="fa fa-angle-right"></i></span>
+              </li>
+              <li class="page-item disabled">
+                <span class="page-link"><i class="fa fa-angle-double-right"></i></span>
+              </li>
+              {% endif %}
+            </ul>
+          </nav>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% block extra_js %}
+<script>
+(function(){
+  function typeBadge(t){
+    switch(t){
+      case 'government': return '<span class="badge bg-primary rounded-pill"><i class="fa fa-building me-1"></i>Government</span>';
+      case 'ngo': return '<span class="badge bg-info rounded-pill"><i class="fa fa-heart me-1"></i>NGO</span>';
+      case 'company': return '<span class="badge bg-success rounded-pill"><i class="fa fa-briefcase me-1"></i>Company</span>';
+      case 'personal': return '<span class="badge bg-secondary rounded-pill"><i class="fa fa-user me-1"></i>Personal</span>';
+      default: return '<span class="badge bg-secondary rounded-pill"><i class="fa fa-user me-1"></i>Personal</span>';
+    }
+  }
+  function fmt(dt){ if(!dt) return '<span class="text-muted">Never</span>'; try{ return new Date(dt).toLocaleString(); }catch(e){ return '<span class="text-muted">Never</span>'; } }
+  function collectIds(){
+    return Array.from(document.querySelectorAll('a[href*="/customers/"]'))
+      .map(a=>{ const m=a.href.match(/\/customers\/(\d+)\/?$/); return m?m[1]:null; })
+      .filter((v,i,arr)=>v && arr.indexOf(v)===i);
+  }
+  function refresh(){
+    const ids = collectIds();
+    if(ids.length===0) return;
+    const params = new URLSearchParams({ ids: ids.join(',') });
+    const branch = new URLSearchParams(window.location.search).get('branch');
+    if(branch) params.set('branch', branch);
+    fetch(`/api/customers/summary/?${params.toString()}`)
+      .then(r=>r.json()).then(j=>{
+        if(!j.success) return;
+        ids.forEach(id=>{
+          const row = Array.from(document.querySelectorAll('tbody tr')).find(tr=>{
+            const link = tr.querySelector(`a[href$="/customers/${id}/"]`); return !!link;
+          });
+          if(!row) return;
+          const c = j.customers[id];
+          if(!c) return;
+          // Update type badge
+          const typeCell = row.children[3];
+          if(typeCell) typeCell.innerHTML = typeBadge(c.customer_type);
+          // Update visits and last visit
+          const visitsCell = row.children[4];
+          const lastVisitCell = row.children[5];
+          if(visitsCell) visitsCell.innerHTML = `<div class="d-flex align-items-center"><span class="badge bg-light text-dark me-1">${c.total_visits}</span>${c.total_visits > 1 ? '<i class="fa fa-star text-warning" title="Returning Customer"></i>' : ''}</div>`;
+          if(lastVisitCell) lastVisitCell.innerHTML = c.last_visit ? fmt(c.last_visit) : '<span class="text-muted">Never</span>';
+          // Apply status filter visibility (active/inactive/returning)
+          const sSel = (new URLSearchParams(window.location.search).get('status')||'').toLowerCase();
+          let ok = true;
+          if(sSel==='active') ok = (c.total_visits > 0);
+          else if(sSel==='inactive') ok = (c.total_visits <= 0);
+          else if(sSel==='returning') ok = (c.total_visits > 1);
+          row.style.display = ok ? '' : 'none';
+        });
+      });
+  }
+  setInterval(refresh, 20000);
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refresh(); });
+  refresh();
+})();
+</script>
+{% endblock %}
+
+<style>
+
+/* Fixed Dropdown Styles */
+.actions-dropdown .dropdown-toggle {
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.actions-dropdown .dropdown-toggle:hover {
+  background-color: #e9ecef;
+  transform: scale(1.05);
+}
+
+.actions-dropdown .dropdown-menu {
+  background-color: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  padding: 0.5rem;
+}
+
+.actions-dropdown .dropdown-item {
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin: 0.125rem 0;
+  transition: all 0.2s ease;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+}
+
+.actions-dropdown .dropdown-item:hover {
+  transform: translateX(2px);
+  text-decoration: none;
+}
+
+.actions-dropdown .dropdown-item.text-primary:hover {
+  background-color: #0d6efd;
+  color: white !important;
+}
+
+.actions-dropdown .dropdown-item.text-success:hover {
+  background-color: #198754;
+  color: white !important;
+}
+
+.actions-dropdown .dropdown-item.text-info:hover {
+  background-color: #0dcaf0;
+  color: white !important;
+}
+
+.actions-dropdown .dropdown-item.text-warning:hover {
+  background-color: #ffc107;
+  color: black !important;
+}
+
+.actions-dropdown .dropdown-item.text-danger:hover {
+  background-color: #dc3545;
+  color: white !important;
+}
+
+/* Ensure dropdown stays open when interacting with form */
+.actions-dropdown .dropdown-menu form {
+  margin: 0;
+}
+
+.actions-dropdown .dropdown-menu form .dropdown-item {
+  margin: 0;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+
+.actions-dropdown .dropdown-menu form .dropdown-item:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Improved table responsiveness */
+.table-responsive {
+  border-radius: 8px;
+}
+
+/* Enhanced pagination */
+.pagination .page-link {
+  border-radius: 6px;
+  margin: 0 2px;
+}
+
+/* Card header improvements */
+.card-header {
+  border-radius: 8px 8px 0 0 !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .kpi-card .card-body {
+    padding: 1rem;
+  }
+  
+  .kpi-icon {
+    display: none;
+  }
+  
+  .actions-dropdown .dropdown-menu {
+    min-width: 180px;
+  }
+}
+</style>
+{% endblock %}
