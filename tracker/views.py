@@ -26,7 +26,13 @@ from django.core.exceptions import ValidationError
 from .models import Profile, Customer, Order, Vehicle, InventoryItem, CustomerNote, Brand, Branch, OrderAttachment
 from django.core.paginator import Paginator
 from .utils import add_audit_log, get_audit_logs, clear_audit_logs, scope_queryset, get_user_branch
-from .utils.pdf_signature import embed_signature_in_pdf, SignatureEmbedError, build_signed_filename
+from .utils.pdf_signature import (
+    embed_signature_in_pdf,
+    SignatureEmbedError,
+    build_signed_filename,
+    embed_signature_in_image,
+    build_signed_name,
+)
 from datetime import datetime, timedelta
 
 
@@ -2659,6 +2665,68 @@ def complete_order(request: HttpRequest, pk: int):
     if o.type == 'sales' and (o.quantity or 0) > 0 and o.item_name and o.brand:
         from .utils import adjust_inventory
         adjust_inventory(o.item_name, o.brand, (o.quantity or 0))
+
+    # Auto-embed signature into already uploaded attachments (PDF/images)
+    try:
+        sig_bytes_for_embed = signature_bytes
+        if sig_bytes_for_embed is None and sig:
+            try:
+                sig.seek(0)
+                sig_bytes_for_embed = sig.read()
+            except Exception:
+                sig_bytes_for_embed = None
+        if sig_bytes_for_embed is None and o.signature_file:
+            try:
+                o.signature_file.open('rb')
+                sig_bytes_for_embed = o.signature_file.read()
+            except Exception:
+                sig_bytes_for_embed = None
+            finally:
+                try:
+                    o.signature_file.close()
+                except Exception:
+                    pass
+        signed_created = 0
+        if sig_bytes_for_embed:
+            image_exts = {'.jpg','.jpeg','.png','.gif','.webp'}
+            for att_item in o.attachments.all():
+                name = att_item.file.name or ''
+                lower = name.lower()
+                try:
+                    att_item.file.open('rb')
+                    src_bytes = att_item.file.read()
+                except Exception:
+                    continue
+                finally:
+                    try:
+                        att_item.file.close()
+                    except Exception:
+                        pass
+                try:
+                    if lower.endswith('.pdf'):
+                        out_bytes = embed_signature_in_pdf(src_bytes, sig_bytes_for_embed)
+                        out_name = build_signed_filename(name)
+                    elif any(lower.endswith(ext) for ext in image_exts):
+                        out_bytes = embed_signature_in_image(src_bytes, sig_bytes_for_embed)
+                        out_name = build_signed_name(name)
+                    else:
+                        continue
+                    OrderAttachment.objects.create(
+                        order=o,
+                        file=ContentFile(out_bytes, name=out_name),
+                        uploaded_by=request.user,
+                        title=(att_item.title or att_item.filename()) + " (Signed)"
+                    )
+                    signed_created += 1
+                except Exception:
+                    continue
+        if signed_created:
+            try:
+                add_audit_log(request.user, 'attachments_signed', f"Signed {signed_created} attachment(s) for order {o.order_number}")
+            except Exception:
+                pass
+    except Exception:
+        pass
 
     o.save()
     try:
