@@ -2670,6 +2670,104 @@ def complete_order(request: HttpRequest, pk: int):
 
 
 @login_required
+@require_http_methods(["POST"])
+def sign_order_document(request: HttpRequest, pk: int):
+    """Generate a signed PDF by embedding the provided signature into the final page."""
+    orders_qs = scope_queryset(Order.objects.all(), request.user, request)
+    order = get_object_or_404(orders_qs, pk=pk)
+
+    pdf_file = (
+        request.FILES.get('document')
+        or request.FILES.get('pdf')
+        or request.FILES.get('file')
+    )
+    signature_payload = request.POST.get('signature_data') or ''
+
+    if not pdf_file or not signature_payload:
+        return JsonResponse({'success': False, 'error': 'PDF document and signature are required.'}, status=400)
+
+    MAX_PDF_BYTES = 10 * 1024 * 1024  # 10 MB
+    MAX_SIGNATURE_BYTES = 2 * 1024 * 1024  # 2 MB
+
+    filename_lower = (pdf_file.name or '').lower()
+    if not filename_lower.endswith('.pdf'):
+        return JsonResponse({'success': False, 'error': 'Only PDF documents can be signed.'}, status=400)
+
+    if hasattr(pdf_file, 'size') and pdf_file.size and pdf_file.size > MAX_PDF_BYTES:
+        return JsonResponse({'success': False, 'error': 'PDF exceeds maximum size of 10MB.'}, status=400)
+
+    def _decode_signature(payload: str) -> bytes:
+        if ';base64,' in payload:
+            payload = payload.split(';base64,', 1)[1]
+        payload = payload.strip()
+        if not payload:
+            raise ValueError('Signature payload is empty.')
+        try:
+            return base64.b64decode(payload)
+        except Exception as exc:
+            raise ValueError('Signature payload is not valid base64.') from exc
+
+    try:
+        signature_bytes = _decode_signature(signature_payload)
+    except ValueError as exc:
+        return JsonResponse({'success': False, 'error': str(exc)}, status=400)
+
+    if len(signature_bytes) > MAX_SIGNATURE_BYTES:
+        return JsonResponse({'success': False, 'error': 'Signature image is too large (max 2MB).'}, status=400)
+
+    try:
+        try:
+            pdf_file.seek(0)
+        except Exception:
+            pass
+        pdf_bytes = pdf_file.read()
+        signed_pdf_bytes = embed_signature_in_pdf(pdf_bytes, signature_bytes)
+    except SignatureEmbedError as exc:
+        return JsonResponse({'success': False, 'error': str(exc)}, status=400)
+    except Exception:
+        return JsonResponse({'success': False, 'error': 'Unable to sign the document.'}, status=500)
+
+    signed_name = build_signed_filename(pdf_file.name)
+
+    signed_content = ContentFile(signed_pdf_bytes, name=signed_name)
+    order.completion_attachment.save(signed_name, signed_content, save=False)
+
+    signature_file_name = f"signature_{order.id}_{int(time.time())}.png"
+    order.signature_file.save(signature_file_name, ContentFile(signature_bytes), save=False)
+
+    now = timezone.now()
+    if not order.started_at:
+        order.started_at = now
+        order.status = 'in_progress'
+    order.status = 'completed'
+    order.completed_at = now
+    order.completion_date = now
+    reference_time = order.started_at or order.created_at
+    order.actual_duration = int(max(0, (now - reference_time).total_seconds() // 60))
+    order.signed_by = request.user
+    order.signed_at = now
+
+    if order.type == 'sales' and (order.quantity or 0) > 0 and order.item_name and order.brand:
+        from .utils import adjust_inventory
+        adjust_inventory(order.item_name, order.brand, (order.quantity or 0))
+
+    order.save()
+
+    try:
+        add_audit_log(request.user, 'order_completed', f"Order {order.order_number} signed and archived as PDF")
+    except Exception:
+        pass
+
+    response = HttpResponse(signed_pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{signed_name}"'
+    try:
+        response['X-Signed-Document-URL'] = order.completion_attachment.url
+    except Exception:
+        response['X-Signed-Document-URL'] = ''
+    return response
+
+
+@login_required
 def cancel_order(request: HttpRequest, pk: int):
     """Cancel an order with a required reason."""
     orders_qs4 = scope_queryset(Order.objects.all(), request.user, request)
