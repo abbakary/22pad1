@@ -508,17 +508,118 @@
       <!-- Enhanced Attachments & Signatures Section -->
       <div class="card shadow-sm mb-4 attachments-card">
         <div class="card-header bg-light d-flex justify-content-between align-items-center">
-          <h6 class="mb-0"><i class="fa fa-paperclip me-2"></i>Attachments & Signatures</h6>
+          <h6 class="mb-0"><i class="fa fa-paperclip me-2"></i>Documents & Signatures</h6>
           {% if order.status != 'completed' and order.status != 'cancelled' and order.type != 'inquiry' %}
-          <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#attachmentModal">
-            <i class="fa fa-plus me-1"></i>Add Files
-          </button>
+          <div class="document-actions">
+            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#attachmentModal">
+              <i class="fa fa-plus me-1"></i>Add Files
+            </button>
+            <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#completeModal">
+              <i class="fa fa-pen me-1"></i>Capture Signature
+            </button>
+          </div>
           {% endif %}
         </div>
         <div class="card-body">
           {% if order.status != 'completed' and order.status != 'cancelled' and order.type != 'inquiry' %}
-          <p class="small text-muted mb-3">Upload supporting files at any time. Capture the customer's signature when they are ready to leave.</p>
+          <div class="document-workflow-alert alert alert-info">
+            <div class="d-flex align-items-center">
+              <i class="fa fa-info-circle fa-lg me-3"></i>
+              <div>
+                <strong>Document Workflow:</strong> Upload supporting files first, then capture the customer's signature when they are ready to leave. The signature process will complete the order.
+              </div>
+            </div>
+          </div>
           {% endif %}
+
+          <!-- Document Categories -->
+          <div class="document-categories mb-4">
+            <div class="row g-3">
+              <!-- Supporting Documents -->
+              <div class="col-md-4">
+                <div class="document-category-card">
+                  <div class="category-header">
+                    <i class="fa fa-files-o text-primary"></i>
+                    <span class="category-title">Supporting Documents</span>
+                    <span class="document-count">{{ order.attachments.all|length }}</span>
+                  </div>
+                  <div class="category-description">
+                    Upload receipts, photos, or additional files
+                  </div>
+                  {% if order.status != 'completed' and order.status != 'cancelled' and order.type != 'inquiry' %}
+                  <button type="button" class="btn btn-sm btn-outline-primary w-100 mt-2" data-bs-toggle="modal" data-bs-target="#attachmentModal">
+                    <i class="fa fa-upload me-1"></i>Upload Files
+                  </button>
+                  {% endif %}
+                </div>
+              </div>
+
+              <!-- Completion Document -->
+              <div class="col-md-4">
+                <div class="document-category-card {% if not order.completion_attachment %}category-pending{% endif %}">
+                  <div class="category-header">
+                    <i class="fa fa-file-text-o text-info"></i>
+                    <span class="category-title">Completion Document</span>
+                    <span class="document-status">
+                      {% if order.completion_attachment %}
+                        <i class="fa fa-check text-success"></i>
+                      {% else %}
+                        <i class="fa fa-clock text-warning"></i>
+                      {% endif %}
+                    </span>
+                  </div>
+                  <div class="category-description">
+                    Final document for customer signature
+                  </div>
+                  {% if order.completion_attachment %}
+                  <div class="document-actions-stacked mt-2">
+                    <a href="{{ order.completion_attachment.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                      <i class="fa fa-eye me-1"></i>View
+                    </a>
+                    <a href="{{ order.completion_attachment.url }}" download class="btn btn-sm btn-outline-secondary">
+                      <i class="fa fa-download me-1"></i>Download
+                    </a>
+                  </div>
+                  {% elif order.status != 'completed' and order.status != 'cancelled' and order.type != 'inquiry' %}
+                  <button type="button" class="btn btn-sm btn-outline-info w-100 mt-2" data-bs-toggle="modal" data-bs-target="#completeModal">
+                    <i class="fa fa-plus me-1"></i>Add Document
+                  </button>
+                  {% endif %}
+                </div>
+              </div>
+
+              <!-- Digital Signature -->
+              <div class="col-md-4">
+                <div class="document-category-card {% if not order.signature_file %}category-pending{% endif %}">
+                  <div class="category-header">
+                    <i class="fa fa-signature text-success"></i>
+                    <span class="category-title">Digital Signature</span>
+                    <span class="document-status">
+                      {% if order.signature_file %}
+                        <i class="fa fa-check text-success"></i>
+                      {% else %}
+                        <i class="fa fa-clock text-warning"></i>
+                      {% endif %}
+                    </span>
+                  </div>
+                  <div class="category-description">
+                    Customer signature capture
+                  </div>
+                  {% if order.signature_file %}
+                  <div class="document-actions-stacked mt-2">
+                    <a href="{{ order.signature_file.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                      <i class="fa fa-eye me-1"></i>View
+                    </a>
+                  </div>
+                  {% elif order.status != 'completed' and order.status != 'cancelled' and order.type != 'inquiry' %}
+                  <button type="button" class="btn btn-sm btn-success w-100 mt-2" data-bs-toggle="modal" data-bs-target="#completeModal">
+                    <i class="fa fa-pen me-1"></i>Capture Signature
+                  </button>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
 
           <!-- Unified Attachments Table -->
           <div class="table-responsive mb-4">
@@ -534,7 +635,7 @@
               <tbody>
                 <!-- Other Attachments -->
                 {% for att in order.attachments.all %}
-                <tr>
+                <tr class="{% if '-signed' in att.file.name|lower %}table-success{% endif %}">
                   <td>
                     <div class="d-flex align-items-center">
                       {% with fname=att.file.name|lower url=att.file.url %}
@@ -546,29 +647,51 @@
                           <i class="fa fa-file text-secondary me-2"></i>
                         {% endif %}
                       {% endwith %}
-                      <span class="text-truncate" title="{{ att.filename }}">{{ att.filename }}</span>
+                      <span class="text-truncate" title="{{ att.filename }}">
+                        {{ att.filename }}
+                        {% if '-signed' in att.file.name|lower %}
+                          <small class="text-success ms-1">(Signed)</small>
+                        {% endif %}
+                      </span>
                     </div>
                   </td>
-                  <td><span class="badge bg-light text-dark">Attachment</span></td>
                   <td>
-                    <span class="badge bg-success">Uploaded</span>
-                    {% with fname=att.file.name|lower %}{% if '-signed' in fname %}
-                      <span class="badge bg-primary ms-1">Signed</span>
-                    {% endif %}{% endwith %}
+                    <span class="badge bg-light text-dark">Attachment</span>
+                    {% if '-signed' in att.file.name|lower %}
+                      <span class="badge bg-success ms-1">Signed</span>
+                    {% endif %}
                   </td>
                   <td>
-                    <a href="{{ att.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                      <i class="fa fa-eye me-1"></i>View
-                    </a>
-                    <a href="{{ att.file.url }}" download class="btn btn-sm btn-outline-secondary ms-1">
-                      <i class="fa fa-download me-1"></i>Download
-                    </a>
+                    {% if '-signed' in att.file.name|lower %}
+                      <span class="badge bg-success">Signed</span>
+                    {% else %}
+                      <span class="badge bg-warning text-dark">Unsigned</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <div class="action-buttons-compact">
+                      <a href="{{ att.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary" title="View">
+                        <i class="fa fa-eye"></i>
+                      </a>
+                      <a href="{{ att.file.url }}" download class="btn btn-sm btn-outline-secondary" title="Download">
+                        <i class="fa fa-download"></i>
+                      </a>
+                      {% if order.status != 'completed' and order.status != 'cancelled' and order.type != 'inquiry' and not '-signed' in att.file.name|lower %}
+                      <button type="button" class="btn btn-sm btn-outline-success sign-existing-doc" 
+                              data-file-url="{{ att.file.url }}" 
+                              data-file-name="{{ att.filename }}"
+                              data-attachment-id="{{ att.id }}"
+                              title="Add Signature">
+                        <i class="fa fa-pen"></i>
+                      </button>
+                      {% endif %}
+                    </div>
                   </td>
                 </tr>
                 {% endfor %}
 
                 <!-- Completion Attachment -->
-                <tr>
+                <tr class="{% if order.completion_attachment %}table-info{% endif %}">
                   <td>
                     <div class="d-flex align-items-center">
                       {% if order.completion_attachment %}
@@ -601,14 +724,16 @@
                   </td>
                   <td>
                     {% if order.completion_attachment %}
-                      <a href="{{ order.completion_attachment.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                        <i class="fa fa-eye me-1"></i>View
-                      </a>
-                      <a href="{{ order.completion_attachment.url }}" download class="btn btn-sm btn-outline-secondary ms-1">
-                        <i class="fa fa-download me-1"></i>Download
-                      </a>
+                      <div class="action-buttons-compact">
+                        <a href="{{ order.completion_attachment.url }}" target="_blank" class="btn btn-sm btn-outline-primary" title="View">
+                          <i class="fa fa-eye"></i>
+                        </a>
+                        <a href="{{ order.completion_attachment.url }}" download class="btn btn-sm btn-outline-secondary" title="Download">
+                          <i class="fa fa-download"></i>
+                        </a>
+                      </div>
                     {% elif order.status != 'completed' and order.status != 'cancelled' and order.type != 'inquiry' %}
-                      <button type="button" class="btn btn-sm btn-outline-primary attachments-modal-trigger">
+                      <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#completeModal">
                         <i class="fa fa-plus me-1"></i>Add
                       </button>
                     {% endif %}
@@ -616,7 +741,7 @@
                 </tr>
 
                 <!-- Digital Signature -->
-                <tr>
+                <tr class="{% if order.signature_file %}table-success{% endif %}">
                   <td>
                     <div class="d-flex align-items-center">
                       <i class="fa fa-signature text-success me-2"></i>
@@ -633,11 +758,13 @@
                   </td>
                   <td>
                     {% if order.signature_file %}
-                      <a href="{{ order.signature_file.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                        <i class="fa fa-eye me-1"></i>View
-                      </a>
+                      <div class="action-buttons-compact">
+                        <a href="{{ order.signature_file.url }}" target="_blank" class="btn btn-sm btn-outline-primary" title="View Signature">
+                          <i class="fa fa-eye"></i>
+                        </a>
+                      </div>
                     {% elif order.status != 'completed' and order.status != 'cancelled' and order.type != 'inquiry' %}
-                      <button type="button" class="btn btn-sm btn-outline-success attachment-signature-trigger">
+                      <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#completeModal">
                         <i class="fa fa-pen me-1"></i>Capture
                       </button>
                     {% endif %}
@@ -647,35 +774,22 @@
             </table>
           </div>
 
-          <!-- Signature Capture Section -->
-          {% if order.status != 'completed' and order.status != 'cancelled' and order.type != 'inquiry' %}
-          <div class="signature-capture-section border rounded p-3 bg-light">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h6 class="mb-0"><i class="fa fa-pen me-2"></i>Signature Capture</h6>
-              <button type="button" class="btn btn-sm btn-success attachment-signature-trigger">
-                <i class="fa fa-pen me-1"></i>Open Signature Pad
-              </button>
-            </div>
-            <p class="small text-muted mb-0">Collect the customer signature when they are ready to leave. Upload all necessary attachments first, then open the signature pad to complete the order.</p>
-          </div>
-          {% endif %}
-
           <!-- Signed Document Preview -->
           {% if order.signature_file and order.completion_attachment %}
           <div class="signed-document-preview mt-4">
             <h6 class="mb-3"><i class="fa fa-file-contract me-2"></i>Signed Document</h6>
-            <div class="border rounded overflow-hidden w-100">
+            <div class="border rounded overflow-hidden bg-light">
               {% with fname=order.completion_attachment.name|lower url=order.completion_attachment.url %}
                 {% if '.jpg' in fname or '.jpeg' in fname or '.png' in fname or '.gif' in fname or '.webp' in fname %}
-                  <div class="position-relative w-100 h-100">
-                    <img src="{{ url }}" alt="Signed Document" class="w-100 h-auto completion-attachment-img" style="display:block; object-fit:contain;">
+                  <div class="position-relative w-100">
+                    <img src="{{ url }}" alt="Signed Document" class="w-100 h-auto completion-attachment-img" style="display:block; object-fit:contain; max-height: 600px;">
                   </div>
                 {% elif fname and '.pdf' in fname %}
-                  <div class="position-relative w-100 h-100">
-                    <div class="pdf-embed-host w-100 h-100" data-pdf-url="{{ url }}" style="min-height:360px;"></div>
+                  <div class="position-relative w-100">
+                    <div class="pdf-embed-host w-100" data-pdf-url="{{ url }}" style="min-height: 500px; background: #f8f9fa;"></div>
                   </div>
                 {% else %}
-                  <div class="w-100 h-100 d-flex align-items-center justify-content-center position-relative p-4">
+                  <div class="w-100 d-flex align-items-center justify-content-center p-4" style="min-height: 200px;">
                     <div class="text-center text-muted">
                       <i class="fa fa-file fa-3x mb-3"></i>
                       <p class="mb-2">Document: {{ order.completion_attachment.name }}</p>
@@ -689,7 +803,7 @@
             </div>
             <div class="mt-2 text-center text-muted small">
               <i class="fa fa-info-circle me-1"></i>
-              Signed document (embedded signature)
+              Signed document (embedded signature) - Completed on {{ order.completion_date|date_medium }}
             </div>
           </div>
           {% endif %}
@@ -699,7 +813,7 @@
 
     <div class="col-lg-4">
       <!-- Order Summary -->
-      <!-- <div class="card shadow-sm mb-4">
+      <div class="card shadow-sm mb-4">
         <div class="card-header bg-light">
           <h6 class="mb-0"><i class="fa fa-tags me-2"></i>Order Summary</h6>
         </div>
@@ -776,7 +890,7 @@
 {% endif %}
 
         </div>
-      </div> -->
+      </div>
 
       <!-- Timeline -->
       <div class="card shadow-sm mb-4">
@@ -936,6 +1050,82 @@
   </div>
 </div>
 
+<!-- Sign Existing Document Modal -->
+<div class="modal fade" id="signExistingModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title"><i class="fa fa-pen me-2"></i>Sign Existing Document</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form method="post" enctype="multipart/form-data" action="{% url 'tracker:sign_existing_document' pk=order.id %}" id="signExistingForm">
+          {% csrf_token %}
+          <input type="hidden" name="signature_data" id="signExistingSignatureData">
+          <input type="hidden" name="attachment_id" id="signExistingAttachmentId">
+          <input type="hidden" name="file_name" id="signExistingFileName">
+          
+          <div class="alert alert-info">
+            <i class="fa fa-info-circle me-2"></i>
+            Adding a signature to this document will create a signed copy. The original document will be preserved.
+          </div>
+          
+          <div class="row g-3">
+            <div class="col-md-7">
+              <label class="form-label fw-medium"><i class="fa fa-file me-1"></i>Document to Sign</label>
+              <div class="p-3 border rounded bg-light">
+                <strong id="currentDocumentName">No document selected</strong>
+              </div>
+              
+              <div class="mt-3">
+                <div id="existingDocSignContainer" class="border rounded position-relative overflow-hidden bg-light" style="height:360px;">
+                  <div id="existingDocPreviewHost" class="w-100 h-100 d-flex align-items-center justify-content-center text-muted">
+                    Select a document to sign
+                  </div>
+                  <canvas id="existingDocSignaturePad" class="position-absolute top-0 start-0 w-100 h-100" style="cursor: crosshair; z-index: 2; display: none;"></canvas>
+                </div>
+                <div class="d-flex gap-2 mt-2">
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="clearExistingSignatureBtn" style="display: none;">
+                    <i class="fa fa-eraser me-1"></i>Clear Signature
+                  </button>
+                  <button type="button" class="btn btn-success btn-sm" id="signExistingDocBtn" style="display: none;">
+                    <i class="fa fa-check me-1"></i>Add Signature to Document
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label fw-medium"><i class="fa fa-info-circle me-1"></i>Live Signature Preview</label>
+              <div class="border rounded p-2 bg-light">
+                <div class="small text-muted mb-2">Your signature as captured:</div>
+                <div class="d-flex align-items-center justify-content-center" style="height:180px;">
+                  <canvas id="existingSignaturePreview" width="400" height="160" class="w-100" style="max-height: 180px; background:#fff; border:1px dashed #dee2e6;"></canvas>
+                </div>
+              </div>
+              
+              <div class="mt-3">
+                <div class="alert alert-warning">
+                  <small>
+                    <i class="fa fa-exclamation-triangle me-1"></i>
+                    <strong>Note:</strong> This will create a new signed version of the document. 
+                    The signature will be embedded and the document will be saved with "-signed" in the filename.
+                  </small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-success" id="footerSignExistingDoc">
+          <i class="fa fa-check me-1"></i>Add Signature to Document
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Cancel Order Modal -->
 <div class="modal fade" id="cancelModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
@@ -1004,6 +1194,102 @@
 {% endif %}
 
 <style>
+  /* Enhanced Document Section Styles */
+  .document-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+  
+  .document-workflow-alert {
+    border-left: 4px solid #17a2b8;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+  }
+  
+  .document-categories {
+    margin-bottom: 2rem;
+  }
+  
+  .document-category-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 10px;
+    padding: 1.25rem;
+    height: 100%;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+  
+  .document-category-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  }
+  
+  .document-category-card.category-pending {
+    border-left: 4px solid #ffc107;
+    background: linear-gradient(135deg, #fffbf0 0%, #fff3cd 100%);
+  }
+  
+  .category-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    gap: 0.75rem;
+  }
+  
+  .category-header i {
+    font-size: 1.5rem;
+    width: 24px;
+  }
+  
+  .category-title {
+    font-weight: 600;
+    color: #495057;
+    flex: 1;
+  }
+  
+  .document-count, .document-status {
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  
+  .document-count {
+    background: #e9ecef;
+    color: #495057;
+    padding: 0.25rem 0.5rem;
+    border-radius: 20px;
+    min-width: 30px;
+    text-align: center;
+  }
+  
+  .category-description {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-bottom: 1rem;
+    line-height: 1.4;
+  }
+  
+  .document-actions-stacked {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  
+  .document-actions-stacked .btn {
+    flex: 1;
+    min-width: 80px;
+  }
+  
+  .action-buttons-compact {
+    display: flex;
+    gap: 0.25rem;
+  }
+  
+  .action-buttons-compact .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+  }
+  
   /* Enhanced Inquiry Section Styles */
   .inquiry-main-card {
     border: none;
@@ -1232,6 +1518,24 @@
     background-color: #dc3545 !important;
   }
   
+  /* PDF embedding styles */
+  .pdf-embed-host iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: white;
+  }
+  
+  .signed-document-preview {
+    border-left: 4px solid #28a745 !important;
+    padding-left: 1rem;
+  }
+  
+  .signed-document-preview .border {
+    border-color: #dee2e6 !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  
   @media (max-width: 767.98px) {
     .time-tracking-card .time-tracking-stat {
       flex: 1 1 100%;
@@ -1246,6 +1550,23 @@
     .vehicle-detail-grid {
       grid-template-columns: 1fr;
       gap: 0.5rem;
+    }
+    
+    .document-actions {
+      flex-direction: column;
+      width: 100%;
+    }
+    
+    .document-actions .btn {
+      width: 100%;
+    }
+    
+    .document-actions-stacked {
+      flex-direction: column;
+    }
+    
+    .action-buttons-compact {
+      flex-direction: column;
     }
   }
   
@@ -1343,12 +1664,396 @@
       width: 100%;
     }
   }
-  </style>
+</style>
 {% endblock %}
 {% block extra_js %}
 <script>
-// KEEP ALL ORIGINAL JAVASCRIPT CODE EXACTLY THE SAME
 (function(){
+  // PDF embedding with graceful fallback - CORRECTED VERSION
+  function initializePdfEmbeds(){
+    var hosts = document.querySelectorAll('.pdf-embed-host');
+    hosts.forEach(function(host){
+      var url = host.getAttribute('data-pdf-url') || '';
+      if(!url) return;
+      
+      try {
+        // Create a proper URL object to handle relative paths
+        var fullUrl = url;
+        if (url.startsWith('/')) {
+          // If it's a relative URL, make it absolute
+          fullUrl = window.location.origin + url;
+        }
+        
+        // For signed PDFs, we should always try to embed them
+        // Check if this is a signed document by checking the URL or context
+        var isSignedDocument = url.includes('-signed') || 
+                              host.closest('.signed-document-preview') !== null ||
+                              host.closest('.attachments-card') !== null;
+        
+        if(isSignedDocument) {
+          // For signed documents, always use iframe embedding
+          var iframe = document.createElement('iframe');
+          iframe.src = fullUrl + '#toolbar=0&navpanes=0&scrollbar=0';
+          iframe.title = 'Signed PDF Document';
+          iframe.className = 'w-100 h-100';
+          iframe.style.border = '0';
+          iframe.style.minHeight = '400px';
+          iframe.style.background = 'white';
+          host.innerHTML = '';
+          host.appendChild(iframe);
+          
+          // Add fallback in case iframe fails to load
+          iframe.onerror = function() {
+            host.innerHTML = '<div class="d-flex w-100 h-100 align-items-center justify-content-center text-center text-muted p-3"><div><i class="fa fa-file-pdf-o fa-2x mb-2"></i><div>PDF preview unavailable</div><a class="btn btn-outline-primary btn-sm mt-2" target="_blank" rel="noopener" href="'+fullUrl+'"><i class="fa fa-external-link me-1"></i>Open PDF</a></div></div>';
+          };
+        } else {
+          // For regular PDFs, use the existing logic
+          var a = document.createElement('a');
+          a.href = fullUrl;
+          var sameOrigin = a.origin === window.location.origin;
+          
+          if(sameOrigin){
+            var iframe = document.createElement('iframe');
+            iframe.src = fullUrl + '#toolbar=0&navpanes=0&scrollbar=0';
+            iframe.title = 'PDF preview';
+            iframe.className = 'w-100 h-100';
+            iframe.style.border = '0';
+            iframe.style.minHeight = '400px';
+            iframe.style.background = 'white';
+            host.innerHTML = '';
+            host.appendChild(iframe);
+          } else {
+            host.innerHTML = '<div class="d-flex w-100 h-100 align-items-center justify-content-center text-center text-muted p-3"><div><i class="fa fa-file-pdf-o fa-2x mb-2"></i><div>External PDF - Download to view</div><a class="btn btn-outline-primary btn-sm mt-2" target="_blank" rel="noopener" href="'+fullUrl+'"><i class="fa fa-download me-1"></i>Download PDF</a></div></div>';
+          }
+        }
+      } catch (e) {
+        console.error('Error embedding PDF:', e);
+        // Fallback: show download link
+        host.innerHTML = '<div class="d-flex w-100 h-100 align-items-center justify-content-center text-center text-muted p-3"><div><i class="fa fa-file-pdf-o fa-2x mb-2"></i><div>Preview unavailable</div><a class="btn btn-outline-primary btn-sm mt-2" target="_blank" rel="noopener" href="'+url+'"><i class="fa fa-external-link me-1"></i>Open PDF</a></div></div>';
+      }
+    });
+  }
+
+  // Function to handle signing existing documents
+  function initializeExistingDocSigning() {
+    const signExistingModal = document.getElementById('signExistingModal');
+    if (!signExistingModal) return;
+
+    const signExistingForm = document.getElementById('signExistingForm');
+    const signExistingSignatureData = document.getElementById('signExistingSignatureData');
+    const signExistingAttachmentId = document.getElementById('signExistingAttachmentId');
+    const signExistingFileName = document.getElementById('signExistingFileName');
+    const currentDocumentName = document.getElementById('currentDocumentName');
+    const existingDocPreviewHost = document.getElementById('existingDocPreviewHost');
+    const existingDocSignaturePad = document.getElementById('existingDocSignaturePad');
+    const clearExistingSignatureBtn = document.getElementById('clearExistingSignatureBtn');
+    const signExistingDocBtn = document.getElementById('signExistingDocBtn');
+    const footerSignExistingDoc = document.getElementById('footerSignExistingDoc');
+
+    let existingDocCurrentFileUrl = null;
+    let existingDocCurrentCanvas = null;
+    let existingDocHasSignature = false;
+
+    // Initialize signature functionality for existing documents
+    function initializeExistingDocSignaturePad() {
+      existingDocCurrentCanvas = createExistingDocSignatureCanvas();
+      if (!existingDocCurrentCanvas) return;
+      setupExistingDocCanvasEvents(existingDocCurrentCanvas);
+    }
+
+    function createExistingDocSignatureCanvas() {
+      const existingCanvas = document.getElementById('existingDocSignaturePad');
+      if (existingCanvas) {
+        existingCanvas.remove();
+      }
+      
+      const container = document.getElementById('existingDocSignContainer');
+      if (!container) return null;
+
+      const canvas = document.createElement('canvas');
+      canvas.id = 'existingDocSignaturePad';
+      canvas.className = 'position-absolute top-0 start-0 w-100 h-100';
+      canvas.style.cssText = 'cursor: crosshair; z-index: 10; display: none; pointer-events: auto; touch-action: none;';
+
+      const rect = container.getBoundingClientRect();
+      const scale = window.devicePixelRatio || 1;
+      canvas.width = (rect.width || container.offsetWidth || 400) * scale;
+      canvas.height = (rect.height || container.offsetHeight || 360) * scale;
+      canvas.style.width = (canvas.width / scale) + 'px';
+      canvas.style.height = (canvas.height / scale) + 'px';
+
+      const ctx = canvas.getContext('2d');
+      ctx.scale(scale, scale);
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#000000';
+      ctx.globalCompositeOperation = 'source-over';
+
+      container.appendChild(canvas);
+      return canvas;
+    }
+
+    function setupExistingDocCanvasEvents(canvas) {
+      const ctx = canvas.getContext('2d');
+      const scale = window.devicePixelRatio || 1;
+      let drawing = false;
+      let lastX = 0;
+      let lastY = 0;
+
+      function getCanvasPosition(e) {
+        const rect = canvas.getBoundingClientRect();
+        let clientX, clientY;
+
+        if (e.type.includes('touch')) {
+          if (e.touches && e.touches[0]) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+          }
+        } else {
+          clientX = e.clientX;
+          clientY = e.clientY;
+        }
+
+        return {
+          x: (clientX - rect.left) * (canvas.width / rect.width / scale),
+          y: (clientY - rect.top) * (canvas.height / rect.height / scale)
+        };
+      }
+
+      function beginStroke(x, y) {
+        drawing = true;
+        lastX = x;
+        lastY = y;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        existingDocHasSignature = true;
+        showExistingDocSignatureTools();
+      }
+
+      function drawStroke(x, y) {
+        if (!drawing) return;
+        ctx.lineTo(x, y);
+        ctx.stroke();
+        lastX = x;
+        lastY = y;
+      }
+
+      function endStroke() {
+        drawing = false;
+      }
+
+      // Event listeners
+      canvas.addEventListener('mousedown', (e) => {
+        const pos = getCanvasPosition(e);
+        beginStroke(pos.x, pos.y);
+      });
+
+      canvas.addEventListener('mousemove', (e) => {
+        const pos = getCanvasPosition(e);
+        drawStroke(pos.x, pos.y);
+      });
+
+      canvas.addEventListener('mouseup', endStroke);
+      canvas.addEventListener('mouseout', endStroke);
+
+      // Touch events
+      canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const pos = getCanvasPosition(e);
+        beginStroke(pos.x, pos.y);
+      }, { passive: false });
+
+      canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const pos = getCanvasPosition(e);
+        drawStroke(pos.x, pos.y);
+      }, { passive: false });
+
+      canvas.addEventListener('touchend', endStroke, { passive: false });
+    }
+
+    function showExistingDocSignatureTools() {
+      if (clearExistingSignatureBtn) clearExistingSignatureBtn.style.display = 'inline-block';
+      if (signExistingDocBtn) {
+        signExistingDocBtn.style.display = 'inline-block';
+        signExistingDocBtn.disabled = false;
+      }
+      if (footerSignExistingDoc) {
+        footerSignExistingDoc.disabled = false;
+      }
+      if (existingDocCurrentCanvas) {
+        existingDocCurrentCanvas.style.display = 'block';
+      }
+    }
+
+    function clearExistingDocSignature() {
+      if (existingDocCurrentCanvas) {
+        const ctx = existingDocCurrentCanvas.getContext('2d');
+        const scale = window.devicePixelRatio || 1;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, existingDocCurrentCanvas.width, existingDocCurrentCanvas.height);
+        ctx.scale(scale, scale);
+      }
+      existingDocHasSignature = false;
+      if (signExistingSignatureData) {
+        signExistingSignatureData.value = '';
+      }
+    }
+
+    function cleanupExistingDocFileUrl() {
+      if (existingDocCurrentFileUrl) {
+        try {
+          URL.revokeObjectURL(existingDocCurrentFileUrl);
+        } catch (e) {
+          console.log('Error revoking URL:', e);
+        }
+        existingDocCurrentFileUrl = null;
+      }
+    }
+
+    function loadExistingDocPreview(fileUrl, fileName) {
+      cleanupExistingDocFileUrl();
+      existingDocHasSignature = false;
+      if (signExistingSignatureData) {
+        signExistingSignatureData.value = '';
+      }
+
+      existingDocPreviewHost.innerHTML = '';
+      existingDocPreviewHost.style.position = 'relative';
+      existingDocPreviewHost.style.overflow = 'hidden';
+
+      if (!fileUrl) {
+        existingDocPreviewHost.innerHTML = '<div class="w-100 h-100 bg-white d-flex align-items-center justify-content-center"><div class="text-center text-muted"><i class="fa fa-pen fa-3x mb-3"></i><div>Draw signature here</div></div></div>';
+        initializeExistingDocSignaturePad();
+        return;
+      }
+
+      existingDocCurrentFileUrl = fileUrl;
+      const fileType = fileName.toLowerCase();
+
+      try {
+        if (fileType.includes('.jpg') || fileType.includes('.jpeg') || fileType.includes('.png') || fileType.includes('.gif') || fileType.includes('.webp')) {
+          const img = document.createElement('img');
+          img.src = existingDocCurrentFileUrl;
+          img.alt = 'Document to sign';
+          img.className = 'w-100 h-100';
+          img.style.objectFit = 'contain';
+          img.style.pointerEvents = 'none';
+          img.onload = function() {
+            if (!existingDocPreviewHost.contains(img)) {
+              existingDocPreviewHost.appendChild(img);
+            }
+            initializeExistingDocSignaturePad();
+          };
+        } else if (fileType.includes('.pdf')) {
+          const iframe = document.createElement('iframe');
+          iframe.src = existingDocCurrentFileUrl + '#toolbar=0&navpanes=0&scrollbar=0';
+          iframe.title = 'PDF preview';
+          iframe.className = 'w-100 h-100';
+          iframe.style.border = 'none';
+          iframe.style.pointerEvents = 'none';
+          iframe.style.minHeight = '360px';
+
+          existingDocPreviewHost.appendChild(iframe);
+          setTimeout(initializeExistingDocSignaturePad, 300);
+        } else {
+          const container = document.createElement('div');
+          container.className = 'w-100 h-100 d-flex align-items-center justify-content-center flex-column';
+          container.style.pointerEvents = 'none';
+          container.innerHTML = `
+            <i class="fa fa-file fa-4x text-muted mb-3"></i>
+            <p class="text-muted text-center mb-3">Preview not available for this file type</p>
+            <a href="${existingDocCurrentFileUrl}" download="${fileName}" class="btn btn-outline-primary btn-sm">
+              <i class="fa fa-download me-1"></i>Download to View
+            </a>
+          `;
+          existingDocPreviewHost.appendChild(container);
+          initializeExistingDocSignaturePad();
+        }
+      } catch (error) {
+        console.error('Error setting document preview:', error);
+        existingDocPreviewHost.innerHTML = '<div class="text-center text-muted p-4">Error loading file preview</div>';
+        initializeExistingDocSignaturePad();
+      }
+    }
+
+    // Set up event listeners for the "Sign" buttons on existing documents
+    document.querySelectorAll('.sign-existing-doc').forEach(button => {
+      button.addEventListener('click', function() {
+        const fileUrl = this.getAttribute('data-file-url');
+        const fileName = this.getAttribute('data-file-name');
+        const attachmentId = this.getAttribute('data-attachment-id');
+        
+        // Set the form values
+        if (signExistingAttachmentId) signExistingAttachmentId.value = attachmentId;
+        if (signExistingFileName) signExistingFileName.value = fileName;
+        if (currentDocumentName) currentDocumentName.textContent = fileName;
+        
+        // Load the document preview
+        loadExistingDocPreview(fileUrl, fileName);
+        
+        // Show the modal
+        const modal = new bootstrap.Modal(document.getElementById('signExistingModal'));
+        modal.show();
+      });
+    });
+
+    // Clear signature button
+    if (clearExistingSignatureBtn) {
+      clearExistingSignatureBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        clearExistingDocSignature();
+      });
+    }
+
+    // Sign existing document button
+    if (signExistingDocBtn) {
+      signExistingDocBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (!existingDocCurrentCanvas) {
+          alert('Signature surface is not available.');
+          return;
+        }
+        if (!existingDocHasSignature) {
+          alert('Please draw the customer signature before adding it to the document.');
+          return;
+        }
+        try {
+          const signatureDataUrl = existingDocCurrentCanvas.toDataURL('image/png', 0.8);
+          if (signExistingSignatureData) signExistingSignatureData.value = signatureDataUrl;
+          const originalHTML = this.innerHTML;
+          this.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i>Processing...';
+          this.disabled = true;
+          cleanupExistingDocFileUrl();
+          
+          // Submit the form
+          signExistingForm.submit();
+        } catch (error) {
+          console.error('Error capturing signature:', error);
+          alert('Could not capture signature. Please try again.');
+          this.innerHTML = '<i class="fa fa-check me-1"></i>Add Signature to Document';
+          this.disabled = false;
+        }
+      });
+    }
+
+    // Footer sign button
+    if (footerSignExistingDoc) {
+      footerSignExistingDoc.addEventListener('click', function(e) {
+        e.preventDefault();
+        const btn = document.getElementById('signExistingDocBtn');
+        if (btn) btn.click();
+      });
+    }
+
+    // Cleanup on modal close
+    signExistingModal.addEventListener('hidden.bs.modal', function() {
+      clearExistingDocSignature();
+      cleanupExistingDocFileUrl();
+    });
+  }
+
   // Prevent any automatic modal opening for completed/cancelled orders
   const orderStatus = '{{ order.status }}';
   const isFinalStatus = orderStatus === 'completed' || orderStatus === 'cancelled';
@@ -1390,48 +2095,6 @@
           });
         });
       }
-    }
-
-    // PDF embedding with graceful fallback - FIXED VERSION
-    function initializePdfEmbeds(){
-      var hosts = document.querySelectorAll('.pdf-embed-host');
-      hosts.forEach(function(host){
-        var url = host.getAttribute('data-pdf-url') || '';
-        if(!url) return;
-        
-        try {
-          // Create a proper URL object to handle relative paths
-          var fullUrl = url;
-          if (url.startsWith('/')) {
-            // If it's a relative URL, make it absolute
-            fullUrl = window.location.origin + url;
-          }
-          
-          // Check if we can embed this PDF (same origin or CORS-enabled)
-          var a = document.createElement('a');
-          a.href = fullUrl;
-          var sameOrigin = a.origin === window.location.origin;
-          
-          if(sameOrigin){
-            // For same-origin PDFs, use iframe embedding
-            var iframe = document.createElement('iframe');
-            iframe.src = fullUrl + '#toolbar=0&navpanes=0&scrollbar=0';
-            iframe.title = 'PDF preview';
-            iframe.className = 'w-100 h-100';
-            iframe.style.border = '0';
-            iframe.style.minHeight = '400px';
-            host.innerHTML = '';
-            host.appendChild(iframe);
-          } else {
-            // For cross-origin PDFs, show download link
-            host.innerHTML = '<div class="d-flex w-100 h-100 align-items-center justify-content-center text-center text-muted p-3"><div><i class="fa fa-file-pdf-o fa-2x mb-2"></i><div>External PDF - Download to view</div><a class="btn btn-outline-primary btn-sm mt-2" target="_blank" rel="noopener" href="'+fullUrl+'"><i class="fa fa-download me-1"></i>Download PDF</a></div></div>';
-          }
-        } catch (e) {
-          console.error('Error embedding PDF:', e);
-          // Fallback: show download link
-          host.innerHTML = '<div class="d-flex w-100 h-100 align-items-center justify-content-center text-center text-muted p-3"><div><i class="fa fa-file-pdf-o fa-2x mb-2"></i><div>Preview unavailable</div><a class="btn btn-outline-primary btn-sm mt-2" target="_blank" rel="noopener" href="'+url+'"><i class="fa fa-external-link me-1"></i>Open PDF</a></div></div>';
-        }
-      });
     }
 
     // Improved signature functionality with better drawing accuracy
@@ -1780,7 +2443,7 @@
             iframe.style.minHeight = '360px';
 
             pdfContainer.appendChild(iframe);
-            docHost.appendChild(pdfContainer);
+            docHost.appendChild(iframe);
 
             setTimeout(resetSignatureSurface, 300);
           } else {
@@ -1917,7 +2580,7 @@
     switch(status){
       case 'completed': return 'Completed';
       case 'cancelled': return 'Cancelled';
-      case 'in_progress': return 'In progress';
+            case 'in_progress': return 'In progress';
       case 'overdue': return 'Overdue';
       case 'created': return 'Created';
       default: return status ? status.replace(/_/g, ' ') : '';
@@ -2096,6 +2759,7 @@
     if (!isFinalStatus) {
       initializeFormToggles();
       initializeSignaturePad();
+      initializeExistingDocSigning();
     } else {
       console.log('Order is completed or cancelled - skipping modal initialization');
     }
