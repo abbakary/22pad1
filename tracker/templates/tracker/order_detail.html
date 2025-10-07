@@ -1597,7 +1597,8 @@
           previewCtx.beginPath();
           previewCtx.moveTo(start.x, start.y);
           previewCtx.lineTo(end.x, end.y);
-          previewCtx.lineWidth = 2;
+          const lineScale = previewCanvas ? (previewCanvas.width / canvas.width) : 1;
+          previewCtx.lineWidth = Math.max(1, (ctx.lineWidth || 2) * lineScale);
           previewCtx.lineCap = 'round';
           previewCtx.lineJoin = 'round';
           previewCtx.strokeStyle = '#000000';
