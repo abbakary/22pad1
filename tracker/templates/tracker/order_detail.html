@@ -550,7 +550,12 @@
                     </div>
                   </td>
                   <td><span class="badge bg-light text-dark">Attachment</span></td>
-                  <td><span class="badge bg-success">Uploaded</span></td>
+                  <td>
+                    <span class="badge bg-success">Uploaded</span>
+                    {% with fname=att.file.name|lower %}{% if '-signed' in fname %}
+                      <span class="badge bg-primary ms-1">Signed</span>
+                    {% endif %}{% endwith %}
+                  </td>
                   <td>
                     <a href="{{ att.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
                       <i class="fa fa-eye me-1"></i>View
@@ -587,6 +592,9 @@
                   <td>
                     {% if order.completion_attachment %}
                       <span class="badge bg-success">Uploaded</span>
+                      {% with fname=order.completion_attachment.name|lower %}{% if '-signed' in fname %}
+                        <span class="badge bg-primary ms-1">Signed</span>
+                      {% endif %}{% endwith %}
                     {% else %}
                       <span class="badge bg-warning text-dark">Pending</span>
                     {% endif %}
@@ -661,12 +669,10 @@
                 {% if '.jpg' in fname or '.jpeg' in fname or '.png' in fname or '.gif' in fname or '.webp' in fname %}
                   <div class="position-relative w-100 h-100">
                     <img src="{{ url }}" alt="Signed Document" class="w-100 h-auto completion-attachment-img" style="display:block; object-fit:contain;">
-                    <img src="{{ order.signature_file.url }}" alt="Signature Overlay" class="signature-overlay img-fluid">
                   </div>
                 {% elif fname and '.pdf' in fname %}
                   <div class="position-relative w-100 h-100">
                     <div class="pdf-embed-host w-100 h-100" data-pdf-url="{{ url }}" style="min-height:360px;"></div>
-                    <img src="{{ order.signature_file.url }}" alt="Signature Overlay" class="signature-overlay img-fluid">
                   </div>
                 {% else %}
                   <div class="w-100 h-100 d-flex align-items-center justify-content-center position-relative p-4">
@@ -677,14 +683,13 @@
                         <i class="fa fa-download me-1"></i>Download Document
                       </a>
                     </div>
-                    <img src="{{ order.signature_file.url }}" alt="Signature Overlay" class="signature-overlay img-fluid">
                   </div>
                 {% endif %}
               {% endwith %}
             </div>
             <div class="mt-2 text-center text-muted small">
               <i class="fa fa-info-circle me-1"></i>
-              Signed document with digital signature overlay
+              Signed document (embedded signature)
             </div>
           </div>
           {% endif %}
