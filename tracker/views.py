@@ -14,7 +14,10 @@ from .forms import ProfileForm, CustomerStep1Form, CustomerStep2Form, CustomerSt
 from django.urls import reverse
 from django.contrib import messages
 from django.core.cache import cache
+from django.core.files.base import ContentFile
+import base64
 import json
+import time
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User, Group
 from django.views.decorators.http import require_http_methods
@@ -23,6 +26,7 @@ from django.core.exceptions import ValidationError
 from .models import Profile, Customer, Order, Vehicle, InventoryItem, CustomerNote, Brand, Branch, OrderAttachment
 from django.core.paginator import Paginator
 from .utils import add_audit_log, get_audit_logs, clear_audit_logs, scope_queryset, get_user_branch
+from .utils.pdf_signature import embed_signature_in_pdf, SignatureEmbedError, build_signed_filename
 from datetime import datetime, timedelta
 
 
@@ -2503,8 +2507,6 @@ def complete_order(request: HttpRequest, pk: int):
     """Complete an order requiring a drawn signature and a completion attachment.
     Accepts either a file upload for signature or a base64-encoded 'signature_data' image.
     Computes duration and adjusts inventory for sales."""
-    from django.core.files.base import ContentFile
-    import base64, time
 
     orders_qs3 = scope_queryset(Order.objects.all(), request.user, request)
     o = get_object_or_404(orders_qs3, pk=pk)
@@ -2538,7 +2540,8 @@ def complete_order(request: HttpRequest, pk: int):
     MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024  # 10 MB
     MAX_SIGNATURE_BYTES = 2 * 1024 * 1024  # 2 MB
 
-    # Helper
+    signature_bytes = None
+
     def _ext_of_name(name):
         try:
             return ('.' + name.split('.')[-1].lower()) if '.' in name else ''
@@ -2550,15 +2553,15 @@ def complete_order(request: HttpRequest, pk: int):
         try:
             header, b64 = sig_data.split(';base64,', 1)
             ext = (header.split('/')[-1] or 'png').split(';')[0]
-            sig_bytes = base64.b64decode(b64)
-            if len(sig_bytes) > MAX_SIGNATURE_BYTES:
+            signature_bytes = base64.b64decode(b64)
+            if len(signature_bytes) > MAX_SIGNATURE_BYTES:
                 messages.error(request, 'Signature image is too large.')
                 return redirect('tracker:order_detail', pk=o.id)
-            sig = ContentFile(sig_bytes, name=f"signature_{o.id}_{int(time.time())}.{ext}")
+            sig = ContentFile(signature_bytes, name=f"signature_{o.id}_{int(time.time())}.{ext}")
         except Exception:
             sig = None
 
-    # If a signature file was uploaded directly, validate size/type
+    # If a signature file was uploaded directly, validate size/type and capture bytes
     if sig and hasattr(sig, 'name'):
         s_ext = _ext_of_name(sig.name)
         if s_ext not in ALLOWED_SIGNATURE_EXTS:
@@ -2567,12 +2570,23 @@ def complete_order(request: HttpRequest, pk: int):
         if hasattr(sig, 'size') and sig.size > MAX_SIGNATURE_BYTES:
             messages.error(request, 'Signature file too large (max 2MB).')
             return redirect('tracker:order_detail', pk=o.id)
+        if signature_bytes is None:
+            try:
+                sig.seek(0)
+            except Exception:
+                pass
+            signature_bytes = sig.read()
+        try:
+            sig.seek(0)
+        except Exception:
+            pass
 
     if not sig:
         messages.error(request, 'Please draw a signature to complete the order.')
         return redirect('tracker:order_detail', pk=o.id)
 
-    # Validate completion attachment if present
+    # Validate completion attachment if present and embed signature when appropriate
+    signed_attachment = None
     if att:
         a_ext = _ext_of_name(att.name)
         if a_ext not in ALLOWED_ATTACHMENT_EXTS:
@@ -2581,14 +2595,56 @@ def complete_order(request: HttpRequest, pk: int):
         if hasattr(att, 'size') and att.size > MAX_ATTACHMENT_BYTES:
             messages.error(request, 'Attachment too large (max 10MB).')
             return redirect('tracker:order_detail', pk=o.id)
+        if a_ext == '.pdf':
+            if signature_bytes is None:
+                try:
+                    sig.seek(0)
+                    signature_bytes = sig.read()
+                except Exception:
+                    signature_bytes = None
+                finally:
+                    try:
+                        sig.seek(0)
+                    except Exception:
+                        pass
+            if not signature_bytes:
+                messages.error(request, 'Could not access the signature image for PDF embedding.')
+                return redirect('tracker:order_detail', pk=o.id)
+            try:
+                try:
+                    att.seek(0)
+                except Exception:
+                    pass
+                pdf_bytes = att.read()
+                signed_pdf_bytes = embed_signature_in_pdf(pdf_bytes, signature_bytes)
+                signed_name = build_signed_filename(att.name)
+                signed_attachment = ContentFile(signed_pdf_bytes, name=signed_name)
+            except SignatureEmbedError as exc:
+                messages.error(request, str(exc))
+                return redirect('tracker:order_detail', pk=o.id)
+            except Exception:
+                messages.error(request, 'Could not embed the signature into the PDF document.')
+                return redirect('tracker:order_detail', pk=o.id)
+        else:
+            try:
+                att.seek(0)
+            except Exception:
+                pass
 
     now = timezone.now()
     if not o.started_at:
         o.started_at = now
         o.status = 'in_progress'
 
+    try:
+        sig.seek(0)
+    except Exception:
+        pass
     o.signature_file = sig
-    o.completion_attachment = att
+    if signed_attachment is not None:
+        o.completion_attachment = signed_attachment
+    elif att:
+        o.completion_attachment = att
     o.signed_by = request.user
     o.signed_at = now
     o.completion_date = now
@@ -2598,7 +2654,6 @@ def complete_order(request: HttpRequest, pk: int):
     if o.started_at:
         o.actual_duration = int((now - o.started_at).total_seconds() // 60)
     else:
-        # If started_at is not set, calculate from created_at
         o.actual_duration = int((now - o.created_at).total_seconds() // 60)
 
     if o.type == 'sales' and (o.quantity or 0) > 0 and o.item_name and o.brand:
@@ -2612,6 +2667,104 @@ def complete_order(request: HttpRequest, pk: int):
         pass
     messages.success(request, 'Order marked as completed.')
     return redirect('tracker:order_detail', pk=o.id)
+
+
+@login_required
+@require_http_methods(["POST"])
+def sign_order_document(request: HttpRequest, pk: int):
+    """Generate a signed PDF by embedding the provided signature into the final page."""
+    orders_qs = scope_queryset(Order.objects.all(), request.user, request)
+    order = get_object_or_404(orders_qs, pk=pk)
+
+    pdf_file = (
+        request.FILES.get('document')
+        or request.FILES.get('pdf')
+        or request.FILES.get('file')
+    )
+    signature_payload = request.POST.get('signature_data') or ''
+
+    if not pdf_file or not signature_payload:
+        return JsonResponse({'success': False, 'error': 'PDF document and signature are required.'}, status=400)
+
+    MAX_PDF_BYTES = 10 * 1024 * 1024  # 10 MB
+    MAX_SIGNATURE_BYTES = 2 * 1024 * 1024  # 2 MB
+
+    filename_lower = (pdf_file.name or '').lower()
+    if not filename_lower.endswith('.pdf'):
+        return JsonResponse({'success': False, 'error': 'Only PDF documents can be signed.'}, status=400)
+
+    if hasattr(pdf_file, 'size') and pdf_file.size and pdf_file.size > MAX_PDF_BYTES:
+        return JsonResponse({'success': False, 'error': 'PDF exceeds maximum size of 10MB.'}, status=400)
+
+    def _decode_signature(payload: str) -> bytes:
+        if ';base64,' in payload:
+            payload = payload.split(';base64,', 1)[1]
+        payload = payload.strip()
+        if not payload:
+            raise ValueError('Signature payload is empty.')
+        try:
+            return base64.b64decode(payload)
+        except Exception as exc:
+            raise ValueError('Signature payload is not valid base64.') from exc
+
+    try:
+        signature_bytes = _decode_signature(signature_payload)
+    except ValueError as exc:
+        return JsonResponse({'success': False, 'error': str(exc)}, status=400)
+
+    if len(signature_bytes) > MAX_SIGNATURE_BYTES:
+        return JsonResponse({'success': False, 'error': 'Signature image is too large (max 2MB).'}, status=400)
+
+    try:
+        try:
+            pdf_file.seek(0)
+        except Exception:
+            pass
+        pdf_bytes = pdf_file.read()
+        signed_pdf_bytes = embed_signature_in_pdf(pdf_bytes, signature_bytes)
+    except SignatureEmbedError as exc:
+        return JsonResponse({'success': False, 'error': str(exc)}, status=400)
+    except Exception:
+        return JsonResponse({'success': False, 'error': 'Unable to sign the document.'}, status=500)
+
+    signed_name = build_signed_filename(pdf_file.name)
+
+    signed_content = ContentFile(signed_pdf_bytes, name=signed_name)
+    order.completion_attachment.save(signed_name, signed_content, save=False)
+
+    signature_file_name = f"signature_{order.id}_{int(time.time())}.png"
+    order.signature_file.save(signature_file_name, ContentFile(signature_bytes), save=False)
+
+    now = timezone.now()
+    if not order.started_at:
+        order.started_at = now
+        order.status = 'in_progress'
+    order.status = 'completed'
+    order.completed_at = now
+    order.completion_date = now
+    reference_time = order.started_at or order.created_at
+    order.actual_duration = int(max(0, (now - reference_time).total_seconds() // 60))
+    order.signed_by = request.user
+    order.signed_at = now
+
+    if order.type == 'sales' and (order.quantity or 0) > 0 and order.item_name and order.brand:
+        from .utils import adjust_inventory
+        adjust_inventory(order.item_name, order.brand, (order.quantity or 0))
+
+    order.save()
+
+    try:
+        add_audit_log(request.user, 'order_completed', f"Order {order.order_number} signed and archived as PDF")
+    except Exception:
+        pass
+
+    response = HttpResponse(signed_pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{signed_name}"'
+    try:
+        response['X-Signed-Document-URL'] = order.completion_attachment.url
+    except Exception:
+        response['X-Signed-Document-URL'] = ''
+    return response
 
 
 @login_required
