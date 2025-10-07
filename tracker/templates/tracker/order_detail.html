@@ -555,6 +555,9 @@
                     <a href="{{ att.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
                       <i class="fa fa-eye me-1"></i>View
                     </a>
+                    <a href="{{ att.file.url }}" download class="btn btn-sm btn-outline-secondary ms-1">
+                      <i class="fa fa-download me-1"></i>Download
+                    </a>
                   </td>
                 </tr>
                 {% endfor %}
@@ -592,6 +595,9 @@
                     {% if order.completion_attachment %}
                       <a href="{{ order.completion_attachment.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
                         <i class="fa fa-eye me-1"></i>View
+                      </a>
+                      <a href="{{ order.completion_attachment.url }}" download class="btn btn-sm btn-outline-secondary ms-1">
+                        <i class="fa fa-download me-1"></i>Download
                       </a>
                     {% elif order.status != 'completed' and order.status != 'cancelled' and order.type != 'inquiry' %}
                       <button type="button" class="btn btn-sm btn-outline-primary attachments-modal-trigger">
