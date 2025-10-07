@@ -26,7 +26,13 @@ from django.core.exceptions import ValidationError
 from .models import Profile, Customer, Order, Vehicle, InventoryItem, CustomerNote, Brand, Branch, OrderAttachment
 from django.core.paginator import Paginator
 from .utils import add_audit_log, get_audit_logs, clear_audit_logs, scope_queryset, get_user_branch
-from .utils.pdf_signature import embed_signature_in_pdf, SignatureEmbedError, build_signed_filename
+from .utils.pdf_signature import (
+    embed_signature_in_pdf,
+    SignatureEmbedError,
+    build_signed_filename,
+    embed_signature_in_image,
+    build_signed_name,
+)
 from datetime import datetime, timedelta
 
 
