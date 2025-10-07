@@ -14,7 +14,10 @@ from .forms import ProfileForm, CustomerStep1Form, CustomerStep2Form, CustomerSt
 from django.urls import reverse
 from django.contrib import messages
 from django.core.cache import cache
+from django.core.files.base import ContentFile
+import base64
 import json
+import time
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User, Group
 from django.views.decorators.http import require_http_methods
@@ -23,6 +26,7 @@ from django.core.exceptions import ValidationError
 from .models import Profile, Customer, Order, Vehicle, InventoryItem, CustomerNote, Brand, Branch, OrderAttachment
 from django.core.paginator import Paginator
 from .utils import add_audit_log, get_audit_logs, clear_audit_logs, scope_queryset, get_user_branch
+from .utils.pdf_signature import embed_signature_in_pdf, SignatureEmbedError, build_signed_filename
 from datetime import datetime, timedelta
 
 
