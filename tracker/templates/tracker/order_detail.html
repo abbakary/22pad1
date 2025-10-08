@@ -1688,7 +1688,7 @@
       const canvas = document.createElement('canvas');
       canvas.id = 'existingDocSignaturePad';
       canvas.className = 'position-absolute top-0 start-0 w-100 h-100';
-      canvas.style.cssText = 'cursor: crosshair; z-index: 10; display: none; pointer-events: auto; touch-action: none;';
+      canvas.style.cssText = 'cursor: crosshair; z-index: 10; display: block; pointer-events: auto; touch-action: none;';
 
       const rect = container.getBoundingClientRect();
       const scale = window.devicePixelRatio || 1;
@@ -2057,7 +2057,7 @@
         const canvas = document.createElement('canvas');
         canvas.id = 'signaturePad';
         canvas.className = 'position-absolute top-0 start-0 w-100 h-100';
-        canvas.style.cssText = 'cursor: crosshair; z-index: 10; display: none; pointer-events: auto; touch-action: none;';
+        canvas.style.cssText = 'cursor: crosshair; z-index: 10; display: block; pointer-events: auto; touch-action: none;';
 
         // Use higher resolution for better quality
         const rect = container.getBoundingClientRect();
