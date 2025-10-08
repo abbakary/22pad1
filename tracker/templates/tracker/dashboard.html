@@ -329,11 +329,11 @@
                         <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="fa fa-calendar me-1"></i>Period
                         </button>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#">This Week</a></li>
-                            <li><a class="dropdown-item" href="#">This Month</a></li>
-                            <li><a class="dropdown-item" href="#">This Quarter</a></li>
-                            <li><a class="dropdown-item" href="#">This Year</a></li>
+                        <ul class="dropdown-menu" id="servicePeriodMenu">
+                            <li><a class="dropdown-item" href="#" data-period="week">This Week</a></li>
+                            <li><a class="dropdown-item" href="#" data-period="month">This Month</a></li>
+                            <li><a class="dropdown-item" href="#" data-period="quarter">This Quarter</a></li>
+                            <li><a class="dropdown-item" href="#" data-period="year">This Year</a></li>
                         </ul>
                     </div>
                 </div>
@@ -643,11 +643,12 @@
     });
 
     // Service Distribution Chart (Bar Chart)
+    var serviceChart = null;
     try{
       var serviceCanvas = document.getElementById('serviceDistributionChart');
       if (serviceCanvas) {
         var ctx = serviceCanvas.getContext('2d');
-        var serviceChart = new Chart(ctx, {
+        serviceChart = new Chart(ctx, {
           type: 'bar',
           data: {
             labels: ['Sales', 'Service', 'Inquiry'],
@@ -707,6 +708,42 @@
           }
         });
       }
+
+      // Period selection handling for Service Distribution
+      (function(){
+        var menu = document.getElementById('servicePeriodMenu');
+        if(!menu) return;
+        menu.addEventListener('click', function(e){
+          var link = e.target.closest('.dropdown-item[data-period]');
+          if(!link) return;
+          e.preventDefault();
+          var period = link.getAttribute('data-period');
+          fetchAndUpdateServiceChart(period);
+        });
+
+        async function fetchAndUpdateServiceChart(period){
+          try{
+            var params = new URLSearchParams();
+            if(period) params.set('period', period);
+            var urlParams = new URLSearchParams(window.location.search);
+            var branch = urlParams.get('branch');
+            if(branch) params.set('branch', branch);
+            var res = await fetch('/api/service-distribution/?' + params.toString(), { headers: { 'Accept': 'application/json' }});
+            var json = await res.json();
+            if(json && json.success && serviceChart){
+              if(Array.isArray(json.values)){
+                serviceChart.data.datasets[0].data = json.values;
+              }
+              if(json.label){
+                serviceChart.data.datasets[0].label = json.label;
+              }
+              serviceChart.update();
+            }
+          }catch(err){
+            console.error('Failed to update service distribution chart:', err);
+          }
+        }
+      })();
     }catch(e){
       console.error('Error creating service distribution chart:', e);
     }

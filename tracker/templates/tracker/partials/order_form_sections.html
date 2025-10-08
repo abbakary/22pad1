@@ -78,8 +78,7 @@
                 {% endif %}
             </div>
             
-            <div class="col-md-8">
-                <label class="form-label">{{ form.tire_type.label }}</label>
+            <div class="col-md-8 d-none">
                 {{ form.tire_type }}
                 {% if form.tire_type.errors %}
                 <div class="text-danger f-12">{{ form.tire_type.errors|striptags }}</div>
