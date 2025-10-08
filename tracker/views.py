@@ -143,6 +143,52 @@ def api_orders_statuses(request: HttpRequest):
     return JsonResponse({'success': True, 'orders': out})
 
 @login_required
+def api_service_distribution(request: HttpRequest):
+    """Return service type distribution for the selected period.
+    period: one of week, month, quarter, year
+    Applies branch/user scoping via scope_queryset.
+    """
+    try:
+        period = (request.GET.get('period') or '').strip().lower()
+        today = timezone.localdate()
+        # Determine start date based on period
+        if period in ('week', 'this_week'):
+            start_date = today - timedelta(days=today.weekday())
+            label = 'This Week'
+        elif period in ('month', 'this_month'):
+            start_date = today.replace(day=1)
+            label = 'This Month'
+        elif period in ('quarter', 'this_quarter'):
+            q_start_month = ((today.month - 1) // 3) * 3 + 1
+            start_date = today.replace(month=q_start_month, day=1)
+            label = 'This Quarter'
+        elif period in ('year', 'this_year'):
+            start_date = today.replace(month=1, day=1)
+            label = 'This Year'
+        else:
+            # Default to current month if unspecified
+            start_date = today.replace(day=1)
+            label = 'This Month'
+
+        orders_qs = scope_queryset(Order.objects.all(), request.user, request)
+        # Filter by created_at date range (inclusive)
+        filtered = orders_qs.filter(created_at__date__gte=start_date, created_at__date__lte=today)
+        rows = filtered.values('type').annotate(c=Count('id'))
+        counts = {r['type']: r['c'] for r in rows}
+        # Ensure consistent order of labels
+        labels = ['Sales', 'Service', 'Inquiry']
+        keys = ['sales', 'service', 'inquiry']
+        values = [int(counts.get(k, 0) or 0) for k in keys]
+        return JsonResponse({
+            'success': True,
+            'labels': labels,
+            'values': values,
+            'label': label,
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+@login_required
 def dashboard(request: HttpRequest):
     # Normalize statuses before computing metrics
     _mark_overdue_orders(hours=24)
