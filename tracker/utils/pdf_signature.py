@@ -3,9 +3,9 @@ from __future__ import annotations
 import math
 from io import BytesIO
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict, Any
 
-from PIL import Image
+from PIL import Image, ImageOps, ImageFilter, ImageEnhance
 from PyPDF2 import PdfReader, PdfWriter
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
@@ -20,8 +20,8 @@ def _scale_dimensions(
     page_height: float,
     image_width: int,
     image_height: int,
-    max_width_ratio: float = 0.3,
-    max_height_ratio: float = 0.2,
+    max_width_ratio: float = 0.35,
+    max_height_ratio: float = 0.12,
 ) -> Tuple[float, float]:
     """Compute scaled signature dimensions preserving aspect ratio within limits."""
     if image_width <= 0 or image_height <= 0:
@@ -40,15 +40,106 @@ def _scale_dimensions(
     return scaled_width, scaled_height
 
 
+def _calculate_signature_position(
+    page_width: float, 
+    page_height: float,
+    signature_width: float,
+    signature_height: float,
+    position_type: str = "customer"
+) -> Tuple[float, float]:
+    """
+    Calculate position for signature based on the form layout.
+    """
+    if position_type == "customer":
+        x = page_width * 0.60
+        y = page_height * 0.18
+    elif position_type == "service_advisor":
+        x = page_width * 0.60
+        y = page_height * 0.12
+    else:
+        x = page_width * 0.60
+        y = page_height * 0.06
+    
+    return x, y
+
+
+def _convert_to_blue_ink(signature_image: Image.Image) -> Image.Image:
+    """Convert signature to look like real blue ink pen writing."""
+    # Convert to RGBA if not already
+    if signature_image.mode != 'RGBA':
+        signature_image = signature_image.convert('RGBA')
+    
+    # Create a new image for blue ink effect
+    width, height = signature_image.size
+    blue_ink_image = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+    
+    # Get pixel data
+    sig_pixels = signature_image.load()
+    blue_pixels = blue_ink_image.load()
+    
+    # Blue ink color variations (like real pen ink)
+    blue_colors = [
+        (0, 50, 200, 255),    # Dark blue
+        (30, 80, 220, 230),   # Medium blue
+        (60, 120, 255, 200),  # Light blue
+    ]
+    
+    for x in range(width):
+        for y in range(height):
+            r, g, b, a = sig_pixels[x, y]
+            
+            # If this is part of the signature (has some opacity)
+            if a > 30:
+                # Calculate intensity to create natural ink variation
+                intensity = (r + g + b) / 3
+                
+                # Choose blue color based on intensity
+                if intensity < 85:
+                    blue_color = blue_colors[0]  # Dark blue for strong lines
+                elif intensity < 170:
+                    blue_color = blue_colors[1]  # Medium blue
+                else:
+                    blue_color = blue_colors[2]  # Light blue for faint areas
+                
+                # Preserve the alpha but use blue color
+                new_alpha = min(255, int(a * 1.2))  # Slightly enhance visibility
+                blue_pixels[x, y] = (blue_color[0], blue_color[1], blue_color[2], new_alpha)
+    
+    return blue_ink_image
+
+
+def _enhance_signature_for_pen_effect(signature_image: Image.Image) -> Image.Image:
+    """Enhance signature to make it look more like pen writing."""
+    # Increase contrast to make signature more defined
+    if signature_image.mode == 'RGBA':
+        # Separate alpha channel
+        r, g, b, a = signature_image.split()
+        
+        # Enhance the RGB channels
+        rgb_image = Image.merge('RGB', (r, g, b))
+        enhancer = ImageEnhance.Contrast(rgb_image)
+        enhanced_rgb = enhancer.enhance(2.0)  # Increase contrast
+        
+        # Convert back to RGBA
+        r_enhanced, g_enhanced, b_enhanced = enhanced_rgb.split()
+        signature_image = Image.merge('RGBA', (r_enhanced, g_enhanced, b_enhanced, a))
+    
+    # Apply slight sharpening to make lines more defined
+    signature_image = signature_image.filter(ImageFilter.UnsharpMask(radius=1, percent=150, threshold=3))
+    
+    return signature_image
+
+
 def embed_signature_in_pdf(
     pdf_bytes: bytes,
     signature_bytes: bytes,
     *,
+    position_type: str = "customer",
     margin: float = 36.0,
-    max_width_ratio: float = 0.3,
-    max_height_ratio: float = 0.2,
+    max_width_ratio: float = 0.35,
+    max_height_ratio: float = 0.12,
 ) -> bytes:
-    """Return a PDF with the signature image embedded on the final page."""
+    """Return a PDF with blue ink signature embedded."""
     if not pdf_bytes:
         raise SignatureEmbedError("No PDF content provided.")
     if not signature_bytes:
@@ -56,7 +147,7 @@ def embed_signature_in_pdf(
 
     try:
         reader = PdfReader(BytesIO(pdf_bytes))
-    except Exception as exc:  # pragma: no cover - defensive for malformed PDFs
+    except Exception as exc:
         raise SignatureEmbedError("Could not read the provided PDF document.") from exc
 
     if len(reader.pages) == 0:
@@ -65,13 +156,21 @@ def embed_signature_in_pdf(
     try:
         signature_image = Image.open(BytesIO(signature_bytes))
         signature_image = signature_image.convert("RGBA")
-    except Exception as exc:  # pragma: no cover - defensive for malformed images
+        
+        # Enhance signature for better pen effect
+        signature_image = _enhance_signature_for_pen_effect(signature_image)
+        
+        # Convert to blue ink
+        signature_image = _convert_to_blue_ink(signature_image)
+        
+    except Exception as exc:
         raise SignatureEmbedError("Could not decode the signature image.") from exc
 
     last_page = reader.pages[-1]
     page_width = float(last_page.mediabox.width)
     page_height = float(last_page.mediabox.height)
 
+    # Scale signature
     scaled_width, scaled_height = _scale_dimensions(
         page_width,
         page_height,
@@ -81,8 +180,10 @@ def embed_signature_in_pdf(
         max_height_ratio=max_height_ratio,
     )
 
-    x_position = max(margin, page_width - scaled_width - margin)
-    y_position = margin
+    # Calculate position
+    x_position, y_position = _calculate_signature_position(
+        page_width, page_height, scaled_width, scaled_height, position_type
+    )
 
     overlay_stream = BytesIO()
     signature_buffer = BytesIO()
@@ -90,14 +191,17 @@ def embed_signature_in_pdf(
     signature_buffer.seek(0)
 
     overlay_canvas = canvas.Canvas(overlay_stream, pagesize=(page_width, page_height))
+    
+    # Draw the blue ink signature
     overlay_canvas.drawImage(
         ImageReader(signature_buffer),
         x_position,
         y_position,
         width=scaled_width,
         height=scaled_height,
-        mask="auto",
+        mask='auto',
     )
+    
     overlay_canvas.save()
     overlay_stream.seek(0)
 
@@ -117,42 +221,17 @@ def embed_signature_in_pdf(
     return output_stream.read()
 
 
-def build_signed_filename(original_name: str, suffix: str = "signed") -> str:
-    """Return a descriptive filename for the signed PDF."""
-    base = Path(original_name or "document").stem or "document"
-    return f"{base}-{suffix}.pdf"
-
-
-def build_signed_name(original_name: str, suffix: str = "signed", preferred_ext: Optional[str] = None) -> str:
-    """Return a descriptive filename preserving extension when possible.
-
-    If preferred_ext is provided, it will be used (including the dot), otherwise
-    the original file's extension is preserved. Falls back to .bin.
-    """
-    p = Path(original_name or "document")
-    base = p.stem or "document"
-    if preferred_ext:
-        ext = preferred_ext if preferred_ext.startswith(".") else f".{preferred_ext}"
-    else:
-        ext = p.suffix or ".bin"
-    return f"{base}-{suffix}{ext}"
-
-
 def embed_signature_in_image(
     image_bytes: bytes,
     signature_bytes: bytes,
     *,
+    position_type: str = "customer",
     margin: int = 12,
-    max_width_ratio: float = 0.3,
-    max_height_ratio: float = 0.2,
+    max_width_ratio: float = 0.35,
+    max_height_ratio: float = 0.12,
     output_format: Optional[str] = None,
 ) -> bytes:
-    """Overlay signature onto the bottom-right of an image and return bytes.
-
-    - Preserves aspect ratio for the signature.
-    - Places the signature inside the image bounds with a small margin.
-    - If output_format is not provided, use the original image format (or PNG if unknown).
-    """
+    """Overlay blue ink signature onto the image."""
     if not image_bytes:
         raise SignatureEmbedError("No image content provided.")
     if not signature_bytes:
@@ -165,6 +244,13 @@ def embed_signature_in_image(
 
     try:
         sig_img = Image.open(BytesIO(signature_bytes)).convert("RGBA")
+        
+        # Enhance signature for better pen effect
+        sig_img = _enhance_signature_for_pen_effect(sig_img)
+        
+        # Convert to blue ink
+        sig_img = _convert_to_blue_ink(sig_img)
+        
     except Exception as exc:
         raise SignatureEmbedError("Could not decode the signature image.") from exc
 
@@ -173,16 +259,26 @@ def embed_signature_in_image(
     base_img = base_img.convert("RGBA")
 
     page_w, page_h = float(base_img.width), float(base_img.height)
+    
+    # Scale signature
     scaled_w, scaled_h = _scale_dimensions(
         page_w, page_h, sig_img.width, sig_img.height,
         max_width_ratio=max_width_ratio, max_height_ratio=max_height_ratio,
     )
 
-    # Resize signature maintaining aspect ratio
+    # Resize signature
     sig_resized = sig_img.resize((int(max(1, scaled_w)), int(max(1, scaled_h))), Image.LANCZOS)
 
-    x = max(margin, page_w - sig_resized.width - margin)
-    y = max(margin, page_h - sig_resized.height - margin)
+    # Calculate position
+    if position_type == "customer":
+        x = page_w * 0.60
+        y = page_h * 0.18
+    elif position_type == "service_advisor":
+        x = page_w * 0.60
+        y = page_h * 0.12
+    else:
+        x = page_w * 0.60
+        y = page_h * 0.06
 
     composed = Image.new("RGBA", base_img.size)
     composed.paste(base_img, (0, 0))
@@ -203,3 +299,20 @@ def embed_signature_in_image(
     composed.save(out, format=fmt)
     out.seek(0)
     return out.read()
+
+
+def build_signed_filename(original_name: str, suffix: str = "signed") -> str:
+    """Return a descriptive filename for the signed PDF."""
+    base = Path(original_name or "document").stem or "document"
+    return f"{base}-{suffix}.pdf"
+
+
+def build_signed_name(original_name: str, suffix: str = "signed", preferred_ext: Optional[str] = None) -> str:
+    """Return a descriptive filename preserving extension when possible."""
+    p = Path(original_name or "document")
+    base = p.stem or "document"
+    if preferred_ext:
+        ext = preferred_ext if preferred_ext.startswith(".") else f".{preferred_ext}"
+    else:
+        ext = p.suffix or ".bin"
+    return f"{base}-{suffix}{ext}"

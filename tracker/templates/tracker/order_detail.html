@@ -6,58 +6,7 @@
 
 {% block content %}
 <div class="container-fluid">
-  <!-- Header Section -->
-  <div class="row mb-4">
-    <div class="col-12">
-      <div class="card shadow-sm border-0">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center">
-            <div>
-              <h4 class="mb-1"><i class="fa fa-file-text me-2 text-primary"></i>Order {{ order.order_number }}</h4>
-              <nav aria-label="breadcrumb">
-                <ol class="breadcrumb mb-0">
-                  <li class="breadcrumb-item"><a href="{% url 'tracker:orders_list' %}"><i class="fa fa-list me-1"></i>Orders</a></li>
-                  <li class="breadcrumb-item active">{{ order.order_number }}</li>
-                </ol>
-              </nav>
-              {% if order.status == 'completed' %}
-              <div class="alert alert-success d-inline-flex align-items-center mt-3 mb-0" role="alert">
-                <i class="fa fa-check-circle me-2"></i>
-                <div>
-                  Order completed{% if order.signed_by %} and signed by <strong>{{ order.signed_by.get_full_name|default:order.signed_by.username }}</strong>{% endif %}{% if order.completion_date %} on <strong>{{ order.completion_date|date_medium }}</strong>{% endif %}.
-                </div>
-              </div>
-              {% endif %}
-            </div>
-            <!-- Unified Action Buttons -->
-            <div class="d-flex gap-2">
-              <a href="{% url 'tracker:orders_list' %}" class="btn btn-outline-primary">
-                <i class="fa fa-arrow-left me-1"></i>Back
-              </a>
-              <a href="{% url 'tracker:order_edit' pk=order.id %}" class="btn btn-outline-success">
-                <i class="fa fa-edit me-1"></i>Edit
-              </a>
-              {% if order.status != 'completed' and order.status != 'cancelled' and order.type != 'inquiry' %}
-              <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#completeModal">
-                <i class="fa fa-pen me-1"></i>Capture Signature
-              </button>
-              <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#cancelModal">
-                <i class="fa fa-times me-1"></i>Cancel
-              </button>
-              {% endif %}
-              <form method="post" action="{% url 'tracker:order_delete' pk=order.id %}" style="display:inline-block;" onsubmit="return confirm('Delete this order?');">
-                {% csrf_token %}
-                <input type="hidden" name="next" value="{% url 'tracker:orders_list' %}">
-                <button type="submit" class="btn btn-outline-danger">
-                  <i class="fa fa-trash me-1"></i>Delete
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+
 
 {% if order.type == 'inquiry' %}
   <!-- Enhanced Inquiry Details Section -->
@@ -621,158 +570,8 @@
             </div>
           </div>
 
-          <!-- Unified Attachments Table -->
-          <div class="table-responsive mb-4">
-            <table class="table table-hover attachments-table">
-              <thead>
-                <tr>
-                  <th width="40%">Document</th>
-                  <th width="20%">Type</th>
-                  <th width="20%">Status</th>
-                  <th width="20%">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <!-- Other Attachments -->
-                {% for att in order.attachments.all %}
-                <tr class="{% if '-signed' in att.file.name|lower %}table-success{% endif %}">
-                  <td>
-                    <div class="d-flex align-items-center">
-                      {% with fname=att.file.name|lower url=att.file.url %}
-                        {% if '.jpg' in fname or '.jpeg' in fname or '.png' in fname or '.gif' in fname or '.webp' in fname %}
-                          <i class="fa fa-file-image-o text-primary me-2"></i>
-                        {% elif '.pdf' in fname %}
-                          <i class="fa fa-file-pdf-o text-danger me-2"></i>
-                        {% else %}
-                          <i class="fa fa-file text-secondary me-2"></i>
-                        {% endif %}
-                      {% endwith %}
-                      <span class="text-truncate" title="{{ att.filename }}">
-                        {{ att.filename }}
-                        {% if '-signed' in att.file.name|lower %}
-                          <small class="text-success ms-1">(Signed)</small>
-                        {% endif %}
-                      </span>
-                    </div>
-                  </td>
-                  <td>
-                    <span class="badge bg-light text-dark">Attachment</span>
-                    {% if '-signed' in att.file.name|lower %}
-                      <span class="badge bg-success ms-1">Signed</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    {% if '-signed' in att.file.name|lower %}
-                      <span class="badge bg-success">Signed</span>
-                    {% else %}
-                      <span class="badge bg-warning text-dark">Unsigned</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    <div class="action-buttons-compact">
-                      <a href="{{ att.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary" title="View">
-                        <i class="fa fa-eye"></i>
-                      </a>
-                      <a href="{{ att.file.url }}" download class="btn btn-sm btn-outline-secondary" title="Download">
-                        <i class="fa fa-download"></i>
-                      </a>
-                      {% if order.status != 'completed' and order.status != 'cancelled' and order.type != 'inquiry' and not '-signed' in att.file.name|lower %}
-                      <button type="button" class="btn btn-sm btn-outline-success sign-existing-doc" 
-                              data-file-url="{{ att.file.url }}" 
-                              data-file-name="{{ att.filename }}"
-                              data-attachment-id="{{ att.id }}"
-                              title="Add Signature">
-                        <i class="fa fa-pen"></i>
-                      </button>
-                      {% endif %}
-                    </div>
-                  </td>
-                </tr>
-                {% endfor %}
-
-                <!-- Completion Attachment -->
-                <tr class="{% if order.completion_attachment %}table-info{% endif %}">
-                  <td>
-                    <div class="d-flex align-items-center">
-                      {% if order.completion_attachment %}
-                        {% with fname=order.completion_attachment.name|lower %}
-                          {% if '.jpg' in fname or '.jpeg' in fname or '.png' in fname or '.gif' in fname or '.webp' in fname %}
-                            <i class="fa fa-file-image-o text-primary me-2"></i>
-                          {% elif '.pdf' in fname %}
-                            <i class="fa fa-file-pdf-o text-danger me-2"></i>
-                          {% else %}
-                            <i class="fa fa-file text-secondary me-2"></i>
-                          {% endif %}
-                        {% endwith %}
-                        <span class="text-truncate" title="{{ order.completion_attachment.name }}">{{ order.completion_attachment.name|truncatechars:30 }}</span>
-                      {% else %}
-                        <i class="fa fa-file text-muted me-2"></i>
-                        <span class="text-muted">No completion document</span>
-                      {% endif %}
-                    </div>
-                  </td>
-                  <td><span class="badge bg-info text-white">Completion</span></td>
-                  <td>
-                    {% if order.completion_attachment %}
-                      <span class="badge bg-success">Uploaded</span>
-                      {% with fname=order.completion_attachment.name|lower %}{% if '-signed' in fname %}
-                        <span class="badge bg-primary ms-1">Signed</span>
-                      {% endif %}{% endwith %}
-                    {% else %}
-                      <span class="badge bg-warning text-dark">Pending</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    {% if order.completion_attachment %}
-                      <div class="action-buttons-compact">
-                        <a href="{{ order.completion_attachment.url }}" target="_blank" class="btn btn-sm btn-outline-primary" title="View">
-                          <i class="fa fa-eye"></i>
-                        </a>
-                        <a href="{{ order.completion_attachment.url }}" download class="btn btn-sm btn-outline-secondary" title="Download">
-                          <i class="fa fa-download"></i>
-                        </a>
-                      </div>
-                    {% elif order.status != 'completed' and order.status != 'cancelled' and order.type != 'inquiry' %}
-                      <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#completeModal">
-                        <i class="fa fa-plus me-1"></i>Add
-                      </button>
-                    {% endif %}
-                  </td>
-                </tr>
-
-                <!-- Digital Signature -->
-                <tr class="{% if order.signature_file %}table-success{% endif %}">
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <i class="fa fa-signature text-success me-2"></i>
-                      <span>Digital Signature</span>
-                    </div>
-                  </td>
-                  <td><span class="badge bg-success text-white">Signature</span></td>
-                  <td>
-                    {% if order.signature_file %}
-                      <span class="badge bg-success">Captured</span>
-                    {% else %}
-                      <span class="badge bg-warning text-dark">Pending</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    {% if order.signature_file %}
-                      <div class="action-buttons-compact">
-                        <a href="{{ order.signature_file.url }}" target="_blank" class="btn btn-sm btn-outline-primary" title="View Signature">
-                          <i class="fa fa-eye"></i>
-                        </a>
-                      </div>
-                    {% elif order.status != 'completed' and order.status != 'cancelled' and order.type != 'inquiry' %}
-                      <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#completeModal">
-                        <i class="fa fa-pen me-1"></i>Capture
-                      </button>
-                    {% endif %}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+     
+        
 
           <!-- Signed Document Preview -->
           {% if order.signature_file and order.completion_attachment %}
@@ -813,7 +612,7 @@
 
     <div class="col-lg-4">
       <!-- Order Summary -->
-      <div class="card shadow-sm mb-4">
+      <!-- <div class="card shadow-sm mb-4">
         <div class="card-header bg-light">
           <h6 class="mb-0"><i class="fa fa-tags me-2"></i>Order Summary</h6>
         </div>
@@ -890,7 +689,7 @@
 {% endif %}
 
         </div>
-      </div>
+      </div> -->
 
       <!-- Timeline -->
       <div class="card shadow-sm mb-4">

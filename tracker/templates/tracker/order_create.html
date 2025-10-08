@@ -105,6 +105,28 @@
       </div>
     </div>
   </div>
+  
+  <!-- Customer Vehicles Section -->
+  <div class="container-fluid mt-3">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title mb-3">
+          <i class="fa fa-car me-2"></i>Customer Vehicles
+          <span id="vehicleCountBadge" class="badge bg-primary ms-2"></span>
+        </h5>
+        <div id="customerVehiclesContainer">
+          <!-- Vehicles will be loaded here -->
+        </div>
+        <div id="noVehiclesMessage" class="alert alert-info" style="display: none;">
+          <i class="fa fa-info-circle me-2"></i>
+          This customer doesn't have any registered vehicles yet. 
+          <button type="button" class="btn btn-sm btn-primary ms-2" data-bs-toggle="modal" data-bs-target="#addVehicleModal">
+            <i class="fa fa-plus me-1"></i>Add New Vehicle
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
   {% endif %}
 
   <div class="container-fluid">
@@ -128,7 +150,12 @@
               <label class="form-label">{{ form.vehicle.label }}</label>
               {{ form.vehicle }}
               {% if form.vehicle.errors %}<div class="text-danger f-12">{{ form.vehicle.errors|striptags }}</div>{% endif %}
-              <small class="text-muted">Or fill vehicle info below for new vehicles.</small>
+              <small class="text-muted">Select from customer's existing vehicles or add a new one.</small>
+              <div class="mt-2">
+                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addVehicleModal">
+                  <i class="fa fa-plus me-1"></i>Add New Vehicle
+                </button>
+              </div>
             </div>
           </div>
 
@@ -139,6 +166,50 @@
             <button class="btn btn-success" type="submit">Create Order</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Vehicle Modal -->
+  <div class="modal fade" id="addVehicleModal" tabindex="-1" aria-labelledby="addVehicleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addVehicleModalLabel">Add New Vehicle</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Plate Number</label>
+              <input type="text" id="modalPlateNumber" class="form-control" placeholder="e.g., T123ABC">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Make</label>
+              <input type="text" id="modalMake" class="form-control" placeholder="e.g., Toyota">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Model</label>
+              <input type="text" id="modalModel" class="form-control" placeholder="e.g., Corolla">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Vehicle Type</label>
+              <select id="modalVehicleType" class="form-select">
+                <option value="">Select type</option>
+                <option value="Car">Car</option>
+                <option value="SUV">SUV</option>
+                <option value="Truck">Truck</option>
+                <option value="Motorcycle">Motorcycle</option>
+                <option value="Bus">Bus</option>
+                <option value="Van">Van</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="saveVehicleBtn">Save Vehicle</button>
+        </div>
       </div>
     </div>
   </div>
@@ -259,42 +330,84 @@
           .then(response => response.json())
           .then(data => {
             const vehicleSelect = document.getElementById('{{ form.vehicle.id_for_label }}');
+            const vehiclesContainer = document.getElementById('customerVehiclesContainer');
+            const noVehiclesMessage = document.getElementById('noVehiclesMessage');
+            const vehicleCountBadge = document.getElementById('vehicleCountBadge');
+            
             if (vehicleSelect) {
-              // Save current value
-              const currentValue = vehicleSelect.value;
-              
               // Clear existing options
               vehicleSelect.innerHTML = '<option value="">Select a vehicle</option>';
               
               // Add customer's vehicles
               if (data.vehicles && data.vehicles.length > 0) {
-                data.vehicles.forEach(vehicle => {
-                  const option = document.createElement('option');
-                  option.value = vehicle.id;
+                // Show vehicles in a user-friendly way
+                let vehiclesHTML = '<div class="row">';
+                data.vehicles.forEach((vehicle, index) => {
                   const vehicleLabel = [
                     vehicle.make || '',
                     vehicle.model || '',
                     vehicle.year ? `(${vehicle.year})` : '',
                     vehicle.license_plate ? `- ${vehicle.license_plate}` : ''
                   ].filter(Boolean).join(' ');
+                  
+                  // Add option to select dropdown
+                  const option = document.createElement('option');
+                  option.value = vehicle.id;
                   option.textContent = vehicleLabel || 'Unnamed Vehicle';
                   vehicleSelect.appendChild(option);
+                  
+                  // Add vehicle card for display
+                  vehiclesHTML += `
+                    <div class="col-md-6 col-lg-4 mb-3">
+                      <div class="card h-100 vehicle-card" data-vehicle-id="${vehicle.id}">
+                        <div class="card-body">
+                          <h6 class="card-title">
+                            <i class="fa fa-car me-2"></i>
+                            ${vehicle.make || 'Vehicle'} ${vehicle.model || ''}
+                          </h6>
+                          <p class="card-text mb-1">
+                            <small class="text-muted">
+                              ${vehicle.license_plate ? `<i class="fa fa-id-card me-1"></i> ${vehicle.license_plate}<br>` : ''}
+                              ${vehicle.year ? `<i class="fa fa-calendar me-1"></i> ${vehicle.year}<br>` : ''}
+                              ${vehicle.vin ? `<i class="fa fa-barcode me-1"></i> ${vehicle.vin}<br>` : ''}
+                            </small>
+                          </p>
+                          <button type="button" class="btn btn-sm btn-outline-primary select-vehicle-btn" data-vehicle-id="${vehicle.id}">
+                            <i class="fa fa-check me-1"></i>Select This Vehicle
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                });
+                vehiclesHTML += '</div>';
+                
+                vehiclesContainer.innerHTML = vehiclesHTML;
+                vehicleCountBadge.textContent = data.vehicles.length;
+                vehicleCountBadge.style.display = 'inline';
+                noVehiclesMessage.style.display = 'none';
+                
+                // Add event listeners to select buttons
+                document.querySelectorAll('.select-vehicle-btn').forEach(button => {
+                  button.addEventListener('click', function() {
+                    const vehicleId = this.getAttribute('data-vehicle-id');
+                    vehicleSelect.value = vehicleId;
+                    
+                    // Highlight selected card
+                    document.querySelectorAll('.vehicle-card').forEach(card => {
+                      card.classList.remove('border-primary');
+                    });
+                    this.closest('.vehicle-card').classList.add('border-primary');
+                  });
                 });
               } else {
-                // Add a disabled option if no vehicles found
-                const option = document.createElement('option');
-                option.disabled = true;
-                option.selected = true;
-                option.textContent = 'No vehicles found for this customer';
-                vehicleSelect.appendChild(option);
+                // No vehicles found
+                vehiclesContainer.innerHTML = '';
+                vehicleCountBadge.style.display = 'none';
+                noVehiclesMessage.style.display = 'block';
               }
               
-              // Restore previous value if it exists in the new options
-              if (currentValue) {
-                vehicleSelect.value = currentValue;
-              }
-              
-              // Enable the vehicle select if it was disabled
+              // Enable the vehicle select
               vehicleSelect.disabled = false;
             }
           })
@@ -307,6 +420,64 @@
             }
           });
       }
+
+      // Save new vehicle
+      document.getElementById('saveVehicleBtn').addEventListener('click', function() {
+        const customerId = document.querySelector('input[name="customer_id"]').value;
+        const plateNumber = document.getElementById('modalPlateNumber').value;
+        const make = document.getElementById('modalMake').value;
+        const model = document.getElementById('modalModel').value;
+        const vehicleType = document.getElementById('modalVehicleType').value;
+        
+        // Simple validation
+        if (!make && !model && !plateNumber) {
+          alert('Please fill in at least one vehicle field');
+          return;
+        }
+        
+        // Create vehicle data
+        const vehicleData = new FormData();
+        vehicleData.append('customer_id', customerId);
+        if (plateNumber) vehicleData.append('plate_number', plateNumber);
+        if (make) vehicleData.append('make', make);
+        if (model) vehicleData.append('model', model);
+        if (vehicleType) vehicleData.append('vehicle_type', vehicleType);
+        
+        // Send request to create vehicle
+        fetch(`/vehicles/${customerId}/add/`, {
+          method: 'POST',
+          body: vehicleData,
+          headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addVehicleModal'));
+            modal.hide();
+            
+            // Clear form fields
+            document.getElementById('modalPlateNumber').value = '';
+            document.getElementById('modalMake').value = '';
+            document.getElementById('modalModel').value = '';
+            document.getElementById('modalVehicleType').value = '';
+            
+            // Reload customer vehicles
+            loadCustomerVehicles(customerId);
+            
+            // Show success message
+            alert('Vehicle added successfully!');
+          } else {
+            alert('Error adding vehicle: ' + (data.error || 'Unknown error'));
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          alert('Error adding vehicle: ' + error.message);
+        });
+      });
 
       // Event listeners
       searchBtn.addEventListener('click', searchCustomers);

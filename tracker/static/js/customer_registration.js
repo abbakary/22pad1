@@ -124,14 +124,17 @@
     // Save customer quick
     var saveBtn = document.getElementById('saveCustomerBtn');
     if(saveBtn){
-      saveBtn.addEventListener('click', function(e){
-        e.preventDefault();
-        var saveOnly = document.getElementById('saveOnly'); if(saveOnly) saveOnly.value='1';
-        ajaxPostForm(form, function(data){
-          if(data.redirect_url){ window.location.href = data.redirect_url; }
-          else if(data.success && data.message){ alert(data.message); }
-        }, function(err){ alert(err); });
-      });
+      if(!saveBtn.dataset.bound){
+        saveBtn.dataset.bound = '1';
+        saveBtn.addEventListener('click', function(e){
+          e.preventDefault();
+          var saveOnly = document.getElementById('saveOnly'); if(saveOnly) saveOnly.value='1';
+          ajaxPostForm(form, function(data){
+            if(data.redirect_url){ window.location.href = data.redirect_url; }
+            else if(data.success && data.message){ alert(data.message); }
+          }, function(err){ alert(err); });
+        });
+      }
     }
 
     // Back buttons

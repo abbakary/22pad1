@@ -18,71 +18,6 @@
     </div>
   </div>
 
-  <div class="row g-3 mb-3">
-    <div class="col-12">
-      <form method="get" class="card p-3">
-        <div class="row g-3 align-items-end">
-          <div class="col-md-3">
-            <label class="form-label">Status</label>
-            <select name="status" class="form-select">
-              {% with s=status %}
-              <option value="all" {% if s == 'all' %}selected{% endif %}>All</option>
-              <option value="created" {% if s == 'created' %}selected{% endif %}>New</option>
-              <option value="in_progress" {% if s == 'in_progress' %}selected{% endif %}>In Progress</option>
-              <option value="overdue" {% if s == 'overdue' %}selected{% endif %}>Overdue</option>
-              <option value="completed" {% if s == 'completed' %}selected{% endif %}>Completed</option>
-              <option value="cancelled" {% if s == 'cancelled' %}selected{% endif %}>Cancelled</option>
-              {% endwith %}
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">Type</label>
-            <select name="type" class="form-select">
-              {% with t=type %}
-              <option value="all" {% if t == 'all' %}selected{% endif %}>All</option>
-              <option value="service" {% if t == 'service' %}selected{% endif %}>Service</option>
-              <option value="sales" {% if t == 'sales' %}selected{% endif %}>Sales</option>
-              <option value="inquiry" {% if t == 'inquiry' %}selected{% endif %}>Inquiry</option>
-              {% endwith %}
-            </select>
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">Priority</label>
-            <select name="priority" class="form-select">
-              <option value="">Any</option>
-              <option value="low" {% if request.GET.priority == 'low' %}selected{% endif %}>Low</option>
-              <option value="medium" {% if request.GET.priority == 'medium' %}selected{% endif %}>Medium</option>
-              <option value="high" {% if request.GET.priority == 'high' %}selected{% endif %}>High</option>
-              <option value="urgent" {% if request.GET.priority == 'urgent' %}selected{% endif %}>Urgent</option>
-            </select>
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">Date Range</label>
-            <select name="date_range" class="form-select">
-              {% with dr=request.GET.date_range|default:'' %}
-              <option value="">Any</option>
-              <option value="daily" {% if dr == 'daily' or dr == 'today' %}selected{% endif %}>Today</option>
-              <option value="weekly" {% if dr == 'weekly' or dr == 'week' %}selected{% endif %}>Last 7 days</option>
-              <option value="monthly" {% if dr == 'monthly' or dr == 'month' %}selected{% endif %}>Last 30 days</option>
-              <option value="yearly" {% if dr == 'yearly' or dr == 'year' %}selected{% endif %}>This year</option>
-              {% endwith %}
-            </select>
-          </div>
-          {% if user.is_superuser %}
-          <div class="col-md-2">
-            <label class="form-label">Branch (admin)</label>
-            <input type="text" name="branch" value="{{ request.GET.branch }}" class="form-control" placeholder="Branch name" list="branchesList">
-            {% include 'tracker/partials/branch_datalist.html' %}
-          </div>
-          {% endif %}
-          <div class="col-md-2 ms-auto">
-            <button class="btn btn-primary w-100" type="submit"><i class="fa fa-filter me-1"></i> Filter</button>
-          </div>
-        </div>
-      </form>
-    </div>
-  </div>
-
   <!-- Enhanced KPI Cards Section -->
   <div class="row g-3 mb-4">
     <div class="col-xl-3 col-md-6">
@@ -162,10 +97,93 @@
     </div>
   </div>
 
+  <!-- Search & Filters Section -->
+  <div class="row g-3 mb-3">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-header bg-light">
+          <h6 class="mb-0"><i class="fa fa-filter me-2"></i>Search & Filters</h6>
+        </div>
+        <div class="card-body">
+          <form method="get">
+            <div class="row g-3 align-items-end">
+              <div class="col-xl-2 col-lg-4 col-md-6">
+                <label class="form-label fw-medium">Status</label>
+                <select name="status" class="form-select">
+                  {% with s=status %}
+                  <option value="all" {% if s == 'all' %}selected{% endif %}>All</option>
+                  <option value="created" {% if s == 'created' %}selected{% endif %}>New</option>
+                  <option value="in_progress" {% if s == 'in_progress' %}selected{% endif %}>In Progress</option>
+                  <option value="overdue" {% if s == 'overdue' %}selected{% endif %}>Overdue</option>
+                  <option value="completed" {% if s == 'completed' %}selected{% endif %}>Completed</option>
+                  <option value="cancelled" {% if s == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                  {% endwith %}
+                </select>
+              </div>
+              <div class="col-xl-2 col-lg-4 col-md-6">
+                <label class="form-label fw-medium">Type</label>
+                <select name="type" class="form-select">
+                  {% with t=type %}
+                  <option value="all" {% if t == 'all' %}selected{% endif %}>All</option>
+                  <option value="service" {% if t == 'service' %}selected{% endif %}>Service</option>
+                  <option value="sales" {% if t == 'sales' %}selected{% endif %}>Sales</option>
+                  <option value="inquiry" {% if t == 'inquiry' %}selected{% endif %}>Inquiry</option>
+                  {% endwith %}
+                </select>
+              </div>
+              <div class="col-xl-2 col-lg-4 col-md-6">
+                <label class="form-label fw-medium">Priority</label>
+                <select name="priority" class="form-select">
+                  <option value="">Any</option>
+                  <option value="low" {% if request.GET.priority == 'low' %}selected{% endif %}>Low</option>
+                  <option value="medium" {% if request.GET.priority == 'medium' %}selected{% endif %}>Medium</option>
+                  <option value="high" {% if request.GET.priority == 'high' %}selected{% endif %}>High</option>
+                  <option value="urgent" {% if request.GET.priority == 'urgent' %}selected{% endif %}>Urgent</option>
+                </select>
+              </div>
+              <div class="col-xl-2 col-lg-4 col-md-6">
+                <label class="form-label fw-medium">Date Range</label>
+                <select name="date_range" class="form-select">
+                  {% with dr=request.GET.date_range|default:'' %}
+                  <option value="">Any</option>
+                  <option value="daily" {% if dr == 'daily' or dr == 'today' %}selected{% endif %}>Today</option>
+                  <option value="weekly" {% if dr == 'weekly' or dr == 'week' %}selected{% endif %}>Last 7 days</option>
+                  <option value="monthly" {% if dr == 'monthly' or dr == 'month' %}selected{% endif %}>Last 30 days</option>
+                  <option value="yearly" {% if dr == 'yearly' or dr == 'year' %}selected{% endif %}>This year</option>
+                  {% endwith %}
+                </select>
+              </div>
+              {% if user.is_superuser %}
+              <div class="col-xl-2 col-lg-4 col-md-6">
+                <label class="form-label fw-medium">Branch (admin)</label>
+                <input type="text" name="branch" value="{{ request.GET.branch }}" class="form-control" placeholder="Branch name" list="branchesList">
+                {% include 'tracker/partials/branch_datalist.html' %}
+              </div>
+              {% endif %}
+              <div class="col-xl-2 col-lg-4 col-md-6">
+                <div class="d-flex gap-2 h-100 pt-3">
+                  <button class="btn btn-primary flex-fill" type="submit">
+                    <i class="fa fa-filter me-1"></i> Filter
+                  </button>
+                  {% if request.GET.status or request.GET.type or request.GET.priority or request.GET.date_range or request.GET.branch %}
+                  <a href="{% url 'tracker:orders_list' %}" class="btn btn-outline-secondary" title="Clear Filters">
+                    <i class="fa fa-times"></i>
+                  </a>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Orders Table -->
   <div class="card shadow-sm">
     <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
       <h5 class="card-title mb-0"><i class="fa fa-list me-2"></i>Orders List</h5>
-      <a href="#" class="btn btn-primary btn-sm">
+      <a href="{% url 'tracker:order_start' %}" class="btn btn-primary btn-sm">
         <i class="fa fa-plus me-1"></i> New Order
       </a>
     </div>
@@ -180,7 +198,7 @@
               <th class="fw-semibold">Status</th>
               <th class="fw-semibold">Priority</th>
               <th class="fw-semibold">Created</th>
-              <th class="fw-semibold text-end">Actions</th>
+              <th class="fw-semibold text-end" style="width: 60px;">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -238,25 +256,20 @@
               <td class="text-muted small">{{ o.created_at|localtime|date_medium }}</td>
               <td class="text-end">
                 <div class="dropdown actions-dropdown">
-                  <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" 
-                          data-bs-toggle="dropdown" aria-expanded="false"
-                          data-bs-auto-close="outside">
+                  <button class="btn btn-action" type="button" data-bs-toggle="dropdown" aria-label="More actions">
                     <i class="fa fa-ellipsis-v"></i>
                   </button>
                   <ul class="dropdown-menu dropdown-menu-end shadow">
                     <li>
-                      <a class="dropdown-item text-primary" href="{% url 'tracker:order_detail' pk=o.id %}">
-                        <i class="fa fa-eye me-2"></i>View Details
+                      <a class="dropdown-item" href="{% url 'tracker:order_detail' pk=o.id %}">
+                        <i class="fa fa-eye me-2 text-primary"></i>View Details
                       </a>
                     </li>
                     <li>
-                      <a class="dropdown-item text-success" href="{% url 'tracker:order_edit' pk=o.id %}">
-                        <i class="fa fa-edit me-2"></i>Edit Order
+                      <a class="dropdown-item" href="{% url 'tracker:order_edit' pk=o.id %}">
+                        <i class="fa fa-edit me-2 text-success"></i>Edit Order
                       </a>
                     </li>
-                    
-                   
-                    
                     <li><hr class="dropdown-divider my-1"></li>
                     <li>
                       <form method="post" action="{% url 'tracker:order_delete' pk=o.id %}" 
@@ -275,8 +288,15 @@
             {% empty %}
             <tr>
               <td colspan="7" class="text-center text-muted py-4">
-                <i class="fa fa-inbox fa-2x mb-2 d-block"></i>
-                No orders found
+                <div class="d-flex flex-column align-items-center">
+                  <i class="fa fa-inbox fa-2x mb-2 text-muted"></i>
+                  <span class="mb-2">No orders found</span>
+                  {% if request.GET.status or request.GET.type or request.GET.priority or request.GET.date_range %}
+                  <a href="{% url 'tracker:orders_list' %}" class="btn btn-sm btn-outline-primary">
+                    <i class="fa fa-times me-1"></i>Clear Filters
+                  </a>
+                  {% endif %}
+                </div>
               </td>
             </tr>
             {% endfor %}
@@ -284,11 +304,12 @@
         </table>
       </div>
 
+      <!-- Pagination -->
       <div class="card-footer bg-light border-top-0">
         <div class="d-flex justify-content-between align-items-center">
           <div class="small text-muted">
             <i class="fa fa-info-circle me-1"></i>
-            Page {{ orders.number }} of {{ orders.paginator.num_pages }}
+            Showing {{ orders.start_index }}-{{ orders.end_index }} of {{ orders.paginator.count }} orders
           </div>
           <nav>
             <ul class="pagination pagination-sm mb-0">
@@ -342,140 +363,6 @@
     </div>
   </div>
 </div>
-
-<style>
-/* Enhanced KPI Cards */
-.kpi-card {
-  border: none;
-  border-radius: 12px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.kpi-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
-}
-
-.kpi-icon {
-  opacity: 0.8;
-}
-
-/* Enhanced Priority Badges */
-.bg-orange {
-  background-color: #ff6b35 !important;
-}
-
-/* Fixed Dropdown Styles */
-.actions-dropdown .dropdown-toggle {
-  border-radius: 6px;
-  padding: 0.25rem 0.5rem;
-  transition: all 0.2s ease;
-}
-
-.actions-dropdown .dropdown-toggle:hover {
-  background-color: #e9ecef;
-  transform: scale(1.05);
-}
-
-.actions-dropdown .dropdown-menu {
-  background-color: #ffffff;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  min-width: 200px;
-  padding: 0.5rem;
-}
-
-.actions-dropdown .dropdown-item {
-  border-radius: 6px;
-  padding: 0.5rem 0.75rem;
-  margin: 0.125rem 0;
-  transition: all 0.2s ease;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-}
-
-.actions-dropdown .dropdown-item:hover {
-  transform: translateX(2px);
-  text-decoration: none;
-}
-
-.actions-dropdown .dropdown-item.text-primary:hover {
-  background-color: #0d6efd;
-  color: white !important;
-}
-
-.actions-dropdown .dropdown-item.text-success:hover {
-  background-color: #198754;
-  color: white !important;
-}
-
-.actions-dropdown .dropdown-item.text-info:hover {
-  background-color: #0dcaf0;
-  color: white !important;
-}
-
-.actions-dropdown .dropdown-item.text-warning:hover {
-  background-color: #ffc107;
-  color: black !important;
-}
-
-.actions-dropdown .dropdown-item.text-danger:hover {
-  background-color: #dc3545;
-  color: white !important;
-}
-
-/* Ensure dropdown stays open when interacting with form */
-.actions-dropdown .dropdown-menu form {
-  margin: 0;
-}
-
-.actions-dropdown .dropdown-menu form .dropdown-item {
-  margin: 0;
-  border: none;
-  background: none;
-  width: 100%;
-  text-align: left;
-}
-
-.actions-dropdown .dropdown-menu form .dropdown-item:focus {
-  outline: none;
-  box-shadow: none;
-}
-
-/* Improved table responsiveness */
-.table-responsive {
-  border-radius: 8px;
-}
-
-/* Enhanced pagination */
-.pagination .page-link {
-  border-radius: 6px;
-  margin: 0 2px;
-}
-
-/* Card header improvements */
-.card-header {
-  border-radius: 8px 8px 0 0 !important;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .kpi-card .card-body {
-    padding: 1rem;
-  }
-  
-  .kpi-icon {
-    display: none;
-  }
-  
-  .actions-dropdown .dropdown-menu {
-    min-width: 180px;
-  }
-}
-</style>
 {% endblock %}
 
 {% block extra_js %}
@@ -516,3 +403,196 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
+
+<style>
+/* Enhanced KPI Cards */
+.kpi-card {
+  border: none;
+  border-radius: 12px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.kpi-icon {
+  opacity: 0.8;
+}
+
+/* Enhanced Priority Badges */
+.bg-orange {
+  background-color: #ff6b35 !important;
+}
+
+/* Clean Action Button - No Dropdown Arrow */
+.btn-action {
+    width: 32px !important;
+    height: 28px !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 6px !important;
+    border: 1px solid #dee2e6 !important;
+    background: white !important;
+    color: #6c757d !important;
+    font-size: 14px !important;
+    transition: all 0.2s ease !important;
+}
+
+.btn-action::after {
+    display: none !important;
+}
+
+.btn-action:hover {
+    background: #f8f9fa !important;
+    border-color: #6c757d !important;
+    color: #495057 !important;
+    transform: scale(1.05);
+}
+
+.btn-action:focus {
+    box-shadow: 0 0 0 0.2rem rgba(108, 117, 125, 0.25) !important;
+}
+
+/* Fixed Dropdown Styles */
+.actions-dropdown .dropdown-menu {
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 180px;
+    padding: 0.5rem;
+}
+
+.actions-dropdown .dropdown-item {
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    margin: 0.125rem 0;
+    transition: all 0.2s ease;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    font-size: 0.85rem;
+}
+
+.actions-dropdown .dropdown-item:hover {
+    transform: translateX(2px);
+    text-decoration: none;
+}
+
+.actions-dropdown .dropdown-item:hover i.text-primary,
+.actions-dropdown .dropdown-item:hover {
+    background-color: #0d6efd;
+    color: white !important;
+}
+
+.actions-dropdown .dropdown-item:hover i.text-success {
+    background-color: #198754;
+    color: white !important;
+}
+
+.actions-dropdown .dropdown-item:hover i.text-warning {
+    background-color: #ffc107;
+    color: black !important;
+}
+
+.actions-dropdown .dropdown-item:hover i.text-danger {
+    background-color: #dc3545;
+    color: white !important;
+}
+
+/* Ensure dropdown stays open when interacting with form */
+.actions-dropdown .dropdown-menu form {
+    margin: 0;
+}
+
+.actions-dropdown .dropdown-menu form .dropdown-item {
+    margin: 0;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+}
+
+.actions-dropdown .dropdown-menu form .dropdown-item:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+/* Improved table responsiveness */
+.table-responsive {
+    border-radius: 8px;
+}
+
+/* Enhanced pagination */
+.pagination .page-link {
+    border-radius: 6px;
+    margin: 0 2px;
+}
+
+/* Card header improvements */
+.card-header {
+    border-radius: 8px 8px 0 0 !important;
+}
+
+/* Full width search section */
+.card-body .row {
+    width: 100%;
+    margin: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .kpi-card .card-body {
+        padding: 1rem;
+    }
+    
+    .kpi-icon {
+        display: none;
+    }
+    
+    .actions-dropdown .dropdown-menu {
+        min-width: 160px;
+    }
+    
+    .btn-action {
+        width: 28px !important;
+        height: 26px !important;
+        font-size: 12px !important;
+    }
+}
+
+/* Better spacing for empty states */
+.table td.text-center {
+    padding: 3rem 1rem;
+}
+
+/* Ensure full width for search section */
+.row.mb-3 .col-12 {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+/* Table action column fixed width */
+th.text-end[style*="width: 60px"],
+td.text-end:last-child {
+    width: 60px;
+    min-width: 60px;
+    max-width: 60px;
+}
+
+/* Remove any dropdown toggle arrows globally */
+.dropdown-toggle::after {
+    display: none !important;
+}
+
+/* Improved Search & Filter Section */
+.card .card-body .form-control:focus,
+.card .card-body .form-select:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}

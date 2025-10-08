@@ -8,44 +8,6 @@
         <div class="row g-3">
               
        {% if not registration_summary_only %}
-            {# Vehicle Information (Optional) #}
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h6 class="mb-0">Vehicle Information </h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="row g-3">
-                            <div class="col-md-3">
-                                <label class="form-label">Plate Number</label>
-                                <input type="text" name="plate_number" class="form-control" placeholder="e.g., T123ABC">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Make</label>
-                                <input type="text" name="make" class="form-control" placeholder="e.g., Toyota">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Model</label>
-                                <input type="text" name="model" class="form-control" placeholder="e.g., Corolla">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Vehicle Type</label>
-                                <select name="vehicle_type" class="form-select">
-                                    <option value="">Select type</option>
-                                    <option>Car</option>
-                                    <option>SUV</option>
-                                    <option>Truck</option>
-                                    <option>Motorcycle</option>
-                                    <option>Bus</option>
-                                    <option>Van</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-               {% if not registration_summary_only %}
             {# Service Offered Selection #}
             <div class="col-12">
                 <div class="card border-success">

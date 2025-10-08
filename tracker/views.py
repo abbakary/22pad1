@@ -2539,6 +2539,8 @@ def complete_order(request: HttpRequest, pk: int):
     sig = request.FILES.get('signature_file')
     sig_data = request.POST.get('signature_data') or ''
     att = request.FILES.get('completion_attachment')
+    doc_kind = (request.POST.get('completion_doc_type') or '').strip().lower()
+    is_job_card = doc_kind in {'job_card', 'jobcard', 'job card'}
 
     # Server-side validation rules
     ALLOWED_ATTACHMENT_EXTS = ['.jpg','.jpeg','.png','.gif','.webp','.pdf','.doc','.docx','.xls','.xlsx','.txt']
@@ -2601,7 +2603,7 @@ def complete_order(request: HttpRequest, pk: int):
         if hasattr(att, 'size') and att.size > MAX_ATTACHMENT_BYTES:
             messages.error(request, 'Attachment too large (max 10MB).')
             return redirect('tracker:order_detail', pk=o.id)
-        image_exts = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+        image_exts = {'.jpg','.jpeg','.png','.gif','.webp'}
         if a_ext == '.pdf':
             if signature_bytes is None:
                 try:
@@ -2623,7 +2625,10 @@ def complete_order(request: HttpRequest, pk: int):
                 except Exception:
                     pass
                 pdf_bytes = att.read()
-                signed_pdf_bytes = embed_signature_in_pdf(pdf_bytes, signature_bytes)
+                if is_job_card:
+                    signed_pdf_bytes = embed_signature_in_pdf(pdf_bytes, signature_bytes, preset='job_card')
+                else:
+                    signed_pdf_bytes = embed_signature_in_pdf(pdf_bytes, signature_bytes)
                 signed_name = build_signed_filename(att.name)
                 signed_attachment = ContentFile(signed_pdf_bytes, name=signed_name)
             except SignatureEmbedError as exc:
@@ -2633,7 +2638,6 @@ def complete_order(request: HttpRequest, pk: int):
                 messages.error(request, 'Could not embed the signature into the PDF document.')
                 return redirect('tracker:order_detail', pk=o.id)
         elif a_ext in image_exts:
-            # Embed signature into image completion attachment as well
             if signature_bytes is None:
                 try:
                     sig.seek(0)
@@ -2654,9 +2658,12 @@ def complete_order(request: HttpRequest, pk: int):
                 except Exception:
                     pass
                 img_bytes = att.read()
-                signed_img_bytes = embed_signature_in_image(img_bytes, signature_bytes)
-                signed_name = build_signed_name(att.name)
-                signed_attachment = ContentFile(signed_img_bytes, name=signed_name)
+                if is_job_card:
+                    out_bytes = embed_signature_in_image(img_bytes, signature_bytes, preset='job_card')
+                else:
+                    out_bytes = embed_signature_in_image(img_bytes, signature_bytes)
+                out_name = build_signed_name(att.name)
+                signed_attachment = ContentFile(out_bytes, name=out_name)
             except SignatureEmbedError as exc:
                 messages.error(request, str(exc))
                 return redirect('tracker:order_detail', pk=o.id)
@@ -2736,10 +2743,16 @@ def complete_order(request: HttpRequest, pk: int):
                         pass
                 try:
                     if lower.endswith('.pdf'):
-                        out_bytes = embed_signature_in_pdf(src_bytes, sig_bytes_for_embed)
+                        if ('job' in lower and 'card' in lower) or is_job_card:
+                            out_bytes = embed_signature_in_pdf(src_bytes, sig_bytes_for_embed, preset='job_card')
+                        else:
+                            out_bytes = embed_signature_in_pdf(src_bytes, sig_bytes_for_embed)
                         out_name = build_signed_filename(name)
                     elif any(lower.endswith(ext) for ext in image_exts):
-                        out_bytes = embed_signature_in_image(src_bytes, sig_bytes_for_embed)
+                        if ('job' in lower and 'card' in lower) or is_job_card:
+                            out_bytes = embed_signature_in_image(src_bytes, sig_bytes_for_embed, preset='job_card')
+                        else:
+                            out_bytes = embed_signature_in_image(src_bytes, sig_bytes_for_embed)
                         out_name = build_signed_name(name)
                     else:
                         continue
@@ -2821,7 +2834,11 @@ def sign_order_document(request: HttpRequest, pk: int):
         except Exception:
             pass
         pdf_bytes = pdf_file.read()
-        signed_pdf_bytes = embed_signature_in_pdf(pdf_bytes, signature_bytes)
+        preset = 'job_card' if (request.POST.get('completion_doc_type') or '').strip().lower() in {'job_card','jobcard','job card'} else None
+        if preset:
+            signed_pdf_bytes = embed_signature_in_pdf(pdf_bytes, signature_bytes, preset=preset)
+        else:
+            signed_pdf_bytes = embed_signature_in_pdf(pdf_bytes, signature_bytes)
     except SignatureEmbedError as exc:
         return JsonResponse({'success': False, 'error': str(exc)}, status=400)
     except Exception:
@@ -2868,85 +2885,112 @@ def sign_order_document(request: HttpRequest, pk: int):
 
 
 @login_required
+@require_http_methods(["POST"])
 def sign_existing_document(request: HttpRequest, pk: int):
-    """Generate a signed PDF by embedding the provided signature into an existing attachment."""
+    """Embed a drawn signature into an already uploaded attachment for this order.
+
+    POST params:
+    - attachment_id: optional OrderAttachment id; if missing, falls back to order.completion_attachment
+    - signature_data: base64 data URL or base64 string (required)
+    - completion_doc_type: optional, if 'job_card' uses job card placement preset
+    """
     orders_qs = scope_queryset(Order.objects.all(), request.user, request)
     order = get_object_or_404(orders_qs, pk=pk)
-    
-    # Get the attachment ID and signature data from the form
-    attachment_id = request.POST.get('attachment_id')
+
+    attachment_id = (request.POST.get('attachment_id') or '').strip()
     signature_payload = request.POST.get('signature_data') or ''
-    file_name = request.POST.get('file_name') or ''
-    
-    if not attachment_id or not signature_payload:
-        return JsonResponse({'success': False, 'error': 'Attachment and signature are required.'}, status=400)
-    
-    # Get the attachment
+    doc_kind = (request.POST.get('completion_doc_type') or '').strip().lower()
+    use_job_card = doc_kind in {'job_card','jobcard','job card'}
+
+    if not signature_payload:
+        messages.error(request, 'Signature is required.')
+        return redirect('tracker:order_detail', pk=order.id)
+
+    # Resolve source document
+    src_bytes = None
+    src_name = None
+    if attachment_id:
+        try:
+            att = get_object_or_404(OrderAttachment, pk=int(attachment_id), order=order)
+        except Exception:
+            messages.error(request, 'Attachment not found for this order.')
+            return redirect('tracker:order_detail', pk=order.id)
+        try:
+            att.file.open('rb')
+            src_bytes = att.file.read()
+            src_name = att.file.name or 'document'
+        finally:
+            try:
+                att.file.close()
+            except Exception:
+                pass
+    elif order.completion_attachment:
+        try:
+            order.completion_attachment.open('rb')
+            src_bytes = order.completion_attachment.read()
+            src_name = order.completion_attachment.name or 'document'
+        finally:
+            try:
+                order.completion_attachment.close()
+            except Exception:
+                pass
+    else:
+        messages.error(request, 'No document selected to sign.')
+        return redirect('tracker:order_detail', pk=order.id)
+
+    lower = (src_name or '').lower()
+    is_pdf = lower.endswith('.pdf')
+
+    # Decode signature
     try:
-        attachment = OrderAttachment.objects.get(id=attachment_id, order=order)
-    except OrderAttachment.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Attachment not found.'}, status=404)
-    
-    MAX_SIGNATURE_BYTES = 2 * 1024 * 1024  # 2 MB
-    
-    def _decode_signature(payload: str) -> bytes:
+        payload = signature_payload
         if ';base64,' in payload:
             payload = payload.split(';base64,', 1)[1]
-        payload = payload.strip()
-        if not payload:
-            raise ValueError('Signature payload is empty.')
-        try:
-            return base64.b64decode(payload)
-        except Exception as exc:
-            raise ValueError('Signature payload is not valid base64.') from exc
-    
+        signature_bytes = base64.b64decode(payload)
+    except Exception:
+        messages.error(request, 'Invalid signature payload.')
+        return redirect('tracker:order_detail', pk=order.id)
+
+    if len(signature_bytes) > (2 * 1024 * 1024):
+        messages.error(request, 'Signature image is too large (max 2MB).')
+        return redirect('tracker:order_detail', pk=order.id)
+
+    # Perform embedding
     try:
-        signature_bytes = _decode_signature(signature_payload)
-    except ValueError as exc:
-        return JsonResponse({'success': False, 'error': str(exc)}, status=400)
-    
-    if len(signature_bytes) > MAX_SIGNATURE_BYTES:
-        return JsonResponse({'success': False, 'error': 'Signature image is too large (max 2MB).'}, status=400)
-    
-    # Read the attachment file
-    try:
-        attachment.file.open('rb')
-        file_bytes = attachment.file.read()
-    finally:
-        attachment.file.close()
-    
-    # Determine file type and process accordingly
-    file_extension = (attachment.file.name or '').lower().split('.')[-1] if '.' in (attachment.file.name or '') else ''
-    
-    try:
-        if file_extension == 'pdf':
-            signed_bytes = embed_signature_in_pdf(file_bytes, signature_bytes)
-            signed_name = build_signed_filename(attachment.file.name or file_name)
-        elif file_extension in ['jpg', 'jpeg', 'png', 'gif', 'webp']:
-            signed_bytes = embed_signature_in_image(file_bytes, signature_bytes)
-            signed_name = build_signed_name(attachment.file.name or file_name)
+        if is_pdf:
+            out = embed_signature_in_pdf(src_bytes, signature_bytes, preset='job_card' if use_job_card else None)
+            out_name = build_signed_filename(src_name)
+            out_content = ContentFile(out, name=out_name)
         else:
-            return JsonResponse({'success': False, 'error': 'Only PDF and image files can be signed.'}, status=400)
+            out = embed_signature_in_image(src_bytes, signature_bytes, preset='job_card' if use_job_card else None)
+            out_name = build_signed_name(src_name)
+            out_content = ContentFile(out, name=out_name)
     except SignatureEmbedError as exc:
-        return JsonResponse({'success': False, 'error': str(exc)}, status=400)
+        messages.error(request, str(exc))
+        return redirect('tracker:order_detail', pk=order.id)
     except Exception:
-        return JsonResponse({'success': False, 'error': 'Unable to sign the document.'}, status=500)
-    
-    # Save the signed document as a new attachment
-    signed_content = ContentFile(signed_bytes, name=signed_name)
-    OrderAttachment.objects.create(
-        order=order,
-        file=signed_content,
-        uploaded_by=request.user,
-        title=f"{attachment.filename()} (Signed)"
-    )
-    
-    try:
-        add_audit_log(request.user, 'attachment_signed', f"Signed attachment {attachment.filename()} for order {order.order_number}")
-    except Exception:
-        pass
-    
-    return JsonResponse({'success': True, 'message': 'Document signed successfully.', 'redirect_url': reverse('tracker:order_detail', kwargs={'pk': pk})})
+        messages.error(request, 'Could not embed signature into the document.')
+        return redirect('tracker:order_detail', pk=order.id)
+
+    # Save as new attachment and ensure signature file stored
+    OrderAttachment.objects.create(order=order, file=out_content, uploaded_by=request.user)
+    if not order.signature_file:
+        order.signature_file.save(f"signature_{order.id}_{int(time.time())}.png", ContentFile(signature_bytes), save=False)
+    now = timezone.now()
+    if not order.started_at:
+        order.started_at = now
+        order.status = 'in_progress'
+    order.status = 'completed'
+    order.completed_at = now
+    order.completion_date = now
+    ref_time = order.started_at or order.created_at
+    order.actual_duration = int(max(0, (now - ref_time).total_seconds() // 60))
+    order.signed_by = request.user
+    order.signed_at = now
+    order.save()
+
+    messages.success(request, 'Signed copy created and attached to the order.')
+    return redirect('tracker:order_detail', pk=order.id)
 
 
 @login_required
@@ -3644,6 +3688,51 @@ def vehicle_add(request: HttpRequest, customer_id: int):
     customers_qs_vadd = scope_queryset(Customer.objects.all(), request.user, request)
     customer = get_object_or_404(customers_qs_vadd, pk=customer_id)
 
+    # Handle AJAX requests
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' and request.method == 'POST':
+        try:
+            # Get form data from POST
+            plate_number = request.POST.get('plate_number', '').strip()
+            make = request.POST.get('make', '').strip()
+            model = request.POST.get('model', '').strip()
+            vehicle_type = request.POST.get('vehicle_type', '').strip()
+            
+            # Validate that at least one field is provided
+            if not plate_number and not make and not model:
+                return JsonResponse({
+                    'success': False, 
+                    'error': 'Please provide at least one vehicle field (plate number, make, or model)'
+                })
+            
+            # Create the vehicle
+            vehicle = Vehicle.objects.create(
+                customer=customer,
+                plate_number=plate_number or None,
+                make=make or None,
+                model=model or None,
+                vehicle_type=vehicle_type or None
+            )
+            
+            # Return success response with vehicle details
+            return JsonResponse({
+                'success': True,
+                'vehicle': {
+                    'id': vehicle.id,
+                    'plate_number': vehicle.plate_number or '',
+                    'make': vehicle.make or '',
+                    'model': vehicle.model or '',
+                    'vehicle_type': vehicle.vehicle_type or ''
+                },
+                'message': 'Vehicle added successfully'
+            })
+            
+        except Exception as e:
+            return JsonResponse({
+                'success': False, 
+                'error': f'Error adding vehicle: {str(e)}'
+            })
+
+    # Handle regular form submissions
     if request.method == 'POST':
         form = VehicleForm(request.POST)
         if form.is_valid():
@@ -3705,6 +3794,7 @@ def vehicle_edit(request: HttpRequest, pk: int):
     
     return render(request, 'tracker/vehicle_form.html', {
         'form': form,
+        'vehicle': vehicle,
         'customer': vehicle.customer,
         'title': 'Edit Vehicle'
     })
