@@ -152,7 +152,7 @@
               {% if form.vehicle.errors %}<div class="text-danger f-12">{{ form.vehicle.errors|striptags }}</div>{% endif %}
               <small class="text-muted">Select from customer's existing vehicles or add a new one.</small>
               <div class="mt-2">
-                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addVehicleModal">
+                <button type="button" id="addVehicleBtnInline" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addVehicleModal">
                   <i class="fa fa-plus me-1"></i>Add New Vehicle
                 </button>
               </div>
@@ -333,7 +333,8 @@
             const vehiclesContainer = document.getElementById('customerVehiclesContainer');
             const noVehiclesMessage = document.getElementById('noVehiclesMessage');
             const vehicleCountBadge = document.getElementById('vehicleCountBadge');
-            
+            const inlineAddBtn = document.getElementById('addVehicleBtnInline');
+
             if (vehicleSelect) {
               // Clear existing options
               vehicleSelect.innerHTML = '<option value="">Select a vehicle</option>';
@@ -386,7 +387,8 @@
                 vehicleCountBadge.textContent = data.vehicles.length;
                 vehicleCountBadge.style.display = 'inline';
                 noVehiclesMessage.style.display = 'none';
-                
+                if (inlineAddBtn) inlineAddBtn.style.display = 'none';
+
                 // Add event listeners to select buttons
                 document.querySelectorAll('.select-vehicle-btn').forEach(button => {
                   button.addEventListener('click', function() {
@@ -405,8 +407,9 @@
                 vehiclesContainer.innerHTML = '';
                 vehicleCountBadge.style.display = 'none';
                 noVehiclesMessage.style.display = 'block';
+                if (inlineAddBtn) inlineAddBtn.style.display = 'inline-block';
               }
-              
+
               // Enable the vehicle select
               vehicleSelect.disabled = false;
             }
@@ -448,7 +451,8 @@
           method: 'POST',
           body: vehicleData,
           headers: {
-            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            'X-Requested-With': 'XMLHttpRequest'
           }
         })
         .then(response => response.json())
@@ -499,8 +503,12 @@
       
       // Disable the vehicle select by default until a customer is selected
       const vehicleSelect = document.getElementById('{{ form.vehicle.id_for_label }}');
-      if (vehicleSelect) {
+      const presetCustomer = document.querySelector('input[name="customer_id"]');
+      if (vehicleSelect && (!presetCustomer || !presetCustomer.value)) {
         vehicleSelect.disabled = true;
+      }
+      if (presetCustomer && presetCustomer.value) {
+        loadCustomerVehicles(presetCustomer.value);
       }
       }
     })();
