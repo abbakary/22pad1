@@ -909,6 +909,48 @@ def customer_register(request: HttpRequest):
     
     # Handle form submission
     if request.method == "POST":
+        # Global quick-save: allow saving just the customer from any step
+        save_only_flag = request.POST.get("save_only") == "1"
+        if save_only_flag and step != 1:
+            step1_data = request.session.get("reg_step1", {}) or {}
+            # Minimal validation
+            full_name = (step1_data.get("full_name") or '').strip()
+            phone = (step1_data.get("phone") or '').strip()
+            if not full_name:
+                if is_ajax:
+                    return json_response(False, message="Please complete Step 1 (customer info) before saving.", message_type="error")
+                messages.error(request, "Please complete Step 1 (customer info) before saving.")
+                return redirect(f"{reverse('tracker:customer_register')}?step=1")
+            # Duplicate handling (same-branch exact identity)
+            from .utils import get_user_branch
+            user_branch = get_user_branch(request.user)
+            existing = Customer.objects.filter(branch=user_branch, full_name__iexact=full_name, phone=phone).first()
+            if existing:
+                if is_ajax:
+                    dup_url = reverse("tracker:customer_detail", kwargs={'pk': existing.id}) + "?flash=existing_customer"
+                    return json_response(False, message=f"Customer '{full_name}' already exists.", message_type="info", redirect_url=dup_url)
+                messages.info(request, f"Customer '{full_name}' already exists. Redirected to their profile.")
+                return redirect("tracker:customer_detail", pk=existing.id)
+            # Create new customer from step1 session
+            c = Customer.objects.create(
+                full_name=full_name,
+                phone=phone,
+                whatsapp=step1_data.get("whatsapp"),
+                email=step1_data.get("email"),
+                address=step1_data.get("address"),
+                notes=step1_data.get("notes"),
+                customer_type=step1_data.get("customer_type"),
+                organization_name=step1_data.get("organization_name"),
+                tax_number=step1_data.get("tax_number"),
+                personal_subtype=step1_data.get("personal_subtype"),
+                branch=user_branch,
+            )
+            # Clear session step1 after save
+            request.session.pop('reg_step1', None)
+            if is_ajax:
+                return json_response(True, message="Customer saved successfully", message_type="success", redirect_url=reverse("tracker:customer_detail", kwargs={'pk': c.id}))
+            messages.success(request, "Customer saved successfully")
+            return redirect("tracker:customer_detail", pk=c.id)
         if step == 1:
             form = CustomerStep1Form(request.POST)
             action = request.POST.get("action")
